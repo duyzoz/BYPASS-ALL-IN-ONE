@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Duyzoz Edition)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      2.1.0
-// @description  Tự động vượt link rút gọn Link4Sub, LayMa.net (Giao diện chuẩn Duyzoz), đếm ngược an toàn và tự điền mã.
+// @version      2.2.0
+// @description  Tự động vượt link Link4Sub (Trích xuất link đích 100%), LayMa.net (Giao diện chuẩn Hình 3 Made by Duyzoz), đếm ngược an toàn và tự điền mã.
 // @author       Duyzoz
 // @match        *://*/*
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
@@ -10,132 +10,181 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setClipboard
 // @grant        GM_addStyle
-// @run-at       document-end
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
     'use strict';
 
-    const currentUrl = window.location.href;
-
     /* =========================================================================
-     *  PHẦN 1: BỘ XỬ LÝ LINK4SUB (Bao gồm cả các domain bọc như onthitracnghiem.com)
+     *  PHẦN 1: BỘ GIẢI MÃ VÀ BẮT LINK ĐÍCH LINK4SUB (TRUE BYPASS - KHÔNG BẤM SUB)
      * ========================================================================= */
-    function detectAndHandleLink4Sub() {
-        // Kiểm tra xem trang có phải là Link4Sub không (qua URL, text, logo, footer)
-        const isLink4Sub = (
-            currentUrl.includes('link4sub.com') ||
-            document.body.innerText.includes('Link4Sub') ||
-            document.querySelector('img[src*="link4sub"], a[href*="link4sub"], footer:has(span:contains("Link4Sub"))') ||
-            document.title.includes('Link4Sub')
-        );
+    let link4SubFound = false;
 
-        if (!isLink4Sub) return false;
+    function handleLink4SubDestination(targetUrl) {
+        if (link4SubFound) return;
+        link4SubFound = true;
 
-        console.log("[Duyzoz Engine] Phát hiện hệ thống Link4Sub!");
+        console.log("[Duyzoz Engine] Đã giải mã thành công link đích Link4Sub:", targetUrl);
+        GM_setClipboard(targetUrl);
 
-        // Tiêm thông báo hỗ trợ trên đầu trang
+        // Hiển thị Banner thành công cực đẹp
         const banner = document.createElement('div');
         banner.style.cssText = `
-            position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: linear-gradient(135deg, #10b981, #059669);
-            color: white; padding: 10px 24px; border-radius: 999px;
-            font-family: sans-serif; font-size: 13px; font-weight: bold;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 99999999;
-            display: flex; align-items: center; gap: 8px;
+            color: #ffffff; padding: 16px 28px; border-radius: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px; font-weight: bold;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3), 0 0 0 2px rgba(255,255,255,0.2);
+            z-index: 2147483647; text-align: center; line-height: 1.6;
         `;
-        banner.innerHTML = `<span>⚡ Made by Duyzoz: Đang tự động mở khoá Link4Sub...</span>`;
-        document.body.appendChild(banner);
+        banner.innerHTML = `
+            <div style="font-size: 16px; margin-bottom: 4px;">🎉 MADE BY DUYZOZ: ĐÃ BYPASS THÀNH CÔNG!</div>
+            <div style="font-size: 12px; color: #d1fae5; font-weight: normal; margin-bottom: 10px;">Link đích: <span style="text-decoration: underline;">${targetUrl.substring(0, 45)}...</span> (Đã copy)</div>
+            <a href="${targetUrl}" style="background: white; color: #059669; padding: 6px 16px; border-radius: 999px; text-decoration: none; font-size: 13px; font-weight: 800; display: inline-block;">ĐI ĐẾN LINK ĐÍCH NGAY ➜</a>
+        `;
+        document.body ? document.body.appendChild(banner) : document.documentElement.appendChild(banner);
 
-        // Chặn popup mở tab YouTube/Mạng xã hội không cần thiết
-        const origOpen = window.open;
-        window.open = function(url, target, features) {
-            if (url && (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('facebook.com') || url.includes('tiktok.com'))) {
-                console.log("[Duyzoz Engine] Đã chặn popup mạng xã hội:", url);
-                banner.innerHTML = `<span>✅ Đã vượt bước xác minh YouTube. Đang mở khoá nút tiếp theo...</span>`;
-                return null;
-            }
-            return origOpen.call(this, url, target, features);
+        // Tự động chuyển hướng sau 1.5 giây
+        setTimeout(() => {
+            window.location.href = targetUrl;
+        }, 1500);
+    }
+
+    // 1. Hook XMLHttpRequest & Fetch để bắt gói tin JSON chứa link đích của Link4Sub
+    function hookNetworkForLink4Sub() {
+        // Hook Fetch
+        const origFetch = window.fetch;
+        window.fetch = async function (...args) {
+            const response = await origFetch.apply(this, args);
+            try {
+                const clone = response.clone();
+                clone.text().then(text => scanTextForEncodedUrl(text));
+            } catch (e) {}
+            return response;
         };
 
-        // Tự động kích hoạt nút nhiệm vụ và mở khoá bước tiếp theo
-        setTimeout(() => {
-            // 1. Tự động click vào các nút nhiệm vụ màu đỏ nếu có
-            const taskBtns = document.querySelectorAll('button, a, .btn');
-            taskBtns.forEach(btn => {
-                const txt = btn.innerText || "";
-                if (txt.includes('Đăng ký kênh') || txt.includes('Subscribe') || txt.includes('Theo dõi')) {
-                    console.log("[Duyzoz Engine] Tự động kích hoạt nhiệm vụ:", txt);
-                    btn.click();
-                }
+        // Hook XHR
+        const origXhrOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+            this.addEventListener('load', function () {
+                try {
+                    scanTextForEncodedUrl(this.responseText);
+                } catch (e) {}
             });
-
-            // 2. Tự động kiểm tra và mở khoá nút "Bước tiếp theo"
-            setInterval(() => {
-                const nextBtns = document.querySelectorAll('button, a, .btn');
-                nextBtns.forEach(btn => {
-                    const txt = btn.innerText || "";
-                    if (txt.includes('Bước tiếp theo') || txt.includes('Mở khoá link') || txt.includes('Get Link') || txt.includes('Lấy link')) {
-                        // Gỡ bỏ disabled / pointer-events: none nếu có
-                        btn.removeAttribute('disabled');
-                        btn.style.pointerEvents = 'auto';
-                        btn.style.opacity = '1';
-
-                        // Nếu nút đã sẵn sàng (chuyển màu xanh) thì click
-                        if (!btn.classList.contains('disabled') && !btn.hasAttribute('disabled')) {
-                            console.log("[Duyzoz Engine] Đang bấm nút chuyển tiếp!");
-                            banner.innerHTML = `<span>🎉 Đang chuyển hướng đến link đích...</span>`;
-                            btn.click();
-                        }
-                    }
-                });
-            }, 1000);
-
-        }, 1200);
-
-        return true;
+            origXhrOpen.apply(this, arguments);
+        };
     }
+
+    // Quét chuỗi Base64 đại diện cho URL (aHR0cHM6Ly = https://, aHR0cDov = http://)
+    function scanTextForEncodedUrl(text) {
+        if (!text || link4SubFound) return;
+
+        // Trường hợp A: JSON chứa trường lnk1
+        try {
+            const json = JSON.parse(text);
+            const rawUrl = json?.data?.data?.lnk?.lnk1?.url || json?.lnk?.lnk1?.url;
+            if (rawUrl) {
+                const decoded = decodeURIComponent(atob(rawUrl));
+                if (decoded.startsWith('http')) {
+                    handleLink4SubDestination(decoded);
+                    return;
+                }
+            }
+        } catch (e) {}
+
+        // Trường hợp B: Quét chuỗi Base64 trực tiếp
+        const base64Regex = /(aHR0cHM6Ly[A-Za-z0-9+/=]{10,}|aHR0cDov[A-Za-z0-9+/=]{10,})/g;
+        let match;
+        while ((match = base64Regex.exec(text)) !== null) {
+            try {
+                const decoded = decodeURIComponent(atob(match[1]));
+                if (decoded.startsWith('http') && !decoded.includes('youtube.com') && !decoded.includes('link4sub') && !decoded.includes('facebook.com')) {
+                    handleLink4SubDestination(decoded);
+                    return;
+                }
+            } catch (e) {}
+        }
+    }
+
+    // Quét toàn bộ mã nguồn trang HTML để tìm link ẩn
+    function scanHtmlScripts() {
+        const scripts = document.querySelectorAll('script');
+        scripts.forEach(s => {
+            if (s.textContent) scanTextForEncodedUrl(s.textContent);
+        });
+        scanTextForEncodedUrl(document.documentElement.innerHTML);
+    }
+
+    hookNetworkForLink4Sub();
 
 
     /* =========================================================================
-     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (GIAO DIỆN CHUẨN 100% Y HỆT HÌNH 3)
+     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (CHUẨN 100% GIAO DIỆN HÌNH 3 - MADE BY DUYZOZ)
      * ========================================================================= */
-    function handleLayMaNet() {
-        if (!currentUrl.includes('layma.net')) return false;
+    function initLayMaPanel() {
+        if (!window.location.hostname.includes('layma.net')) return;
+        if (document.getElementById('duyzoz-layma-panel')) return;
 
-        console.log("[Duyzoz Engine] Phát hiện LayMa.net. Đang dựng giao diện điều khiển...");
+        console.log("[Duyzoz Engine] Đang dựng giao diện LayMa.net chuẩn Hình 3...");
 
-        // Tìm link ảnh hướng dẫn và từ khoá có sẵn trên trang layma.net
+        // 1. Tự động bóc tách Link ảnh hướng dẫn và Từ khóa có trên trang
         let guideImgUrl = "";
         let searchKeyword = "Không có từ khóa";
 
-        const imgEl = document.querySelector('img[src*="layma.net/media"], img[src*="posts"], .guide-img, img[src*="images"]');
-        if (imgEl) guideImgUrl = imgEl.src;
+        // Quét ảnh
+        const imgs = document.querySelectorAll('img');
+        for (const img of imgs) {
+            if (img.src && (img.src.includes('layma.net/media') || img.src.includes('posts') || img.src.includes('images'))) {
+                guideImgUrl = img.src;
+                break;
+            }
+        }
+        if (!guideImgUrl && imgs.length > 0) {
+            for (const img of imgs) {
+                if (img.width > 220 || img.height > 80) {
+                    guideImgUrl = img.src;
+                    break;
+                }
+            }
+        }
 
-        const bodyText = document.body.innerText;
-        const kwMatch = bodyText.match(/từ kh[oó]a[:\s]+([^\n\r]+)/i);
-        if (kwMatch) searchKeyword = kwMatch[1].trim();
+        // Quét từ khóa
+        const allElements = document.querySelectorAll('div, p, b, strong, span');
+        for (const el of allElements) {
+            const txt = el.innerText || "";
+            if (txt.includes('sunwin') || txt.includes('88bet') || txt.includes('w88') || txt.includes('bk8')) {
+                const words = txt.trim().split(/\s+/);
+                if (words.length <= 3) {
+                    searchKeyword = txt.trim();
+                    break;
+                }
+            }
+        }
 
-        // 1. Tiêm CSS giao diện chuẩn Hình 3
+        // 2. CSS Giao diện chuẩn xác theo Hình 3
         GM_addStyle(`
             #duyzoz-layma-panel {
                 position: fixed;
-                top: 20px;
-                right: 20px;
+                top: 15px;
+                right: 25px;
                 width: 480px;
                 max-width: 95vw;
                 background: #ffffff;
+                border: 1px solid #fde68a;
                 border-radius: 16px;
-                box-shadow: 0 15px 35px rgba(0,0,0,0.18), 0 0 0 1px rgba(245, 158, 11, 0.2);
-                z-index: 99999999;
+                box-shadow: 0 20px 45px rgba(0,0,0,0.18), 0 0 0 1px rgba(245, 158, 11, 0.25);
+                z-index: 2147483647;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 color: #334155;
-                overflow: hidden;
-                animation: panelSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                padding: 16px;
+                box-sizing: border-box;
+                animation: panelFadeIn 0.3s ease-out;
             }
 
-            @keyframes panelSlide {
-                from { opacity: 0; transform: translateY(-15px); }
+            @keyframes panelFadeIn {
+                from { opacity: 0; transform: translateY(-10px); }
                 to { opacity: 1; transform: translateY(0); }
             }
 
@@ -144,23 +193,25 @@
                 background: #eff6ff;
                 border: 1px solid #bfdbfe;
                 border-radius: 12px;
-                margin: 16px 16px 12px 16px;
-                padding: 16px;
+                padding: 14px;
                 text-align: center;
+                margin-bottom: 12px;
+                position: relative;
             }
             .dz-brand-title {
-                font-size: 20px;
+                font-size: 22px;
                 font-weight: 800;
                 color: #d946ef;
-                letter-spacing: 0.02em;
-                margin-bottom: 4px;
+                letter-spacing: -0.01em;
+                margin-bottom: 3px;
             }
             .dz-brand-link {
                 color: #3b82f6;
                 font-size: 13px;
-                font-weight: 600;
+                font-weight: 700;
                 text-decoration: none;
             }
+            .dz-brand-link:hover { text-decoration: underline; }
             .dz-brand-sub {
                 color: #64748b;
                 font-size: 12px;
@@ -172,15 +223,16 @@
                 background: #fffbeb;
                 border: 1px solid #fde68a;
                 border-radius: 12px;
-                margin: 0 16px 12px 16px;
                 padding: 14px 16px;
                 font-size: 13px;
                 color: #b45309;
+                margin-bottom: 12px;
             }
             .dz-settings-title {
                 font-weight: 700;
                 margin-bottom: 10px;
                 color: #92400e;
+                font-size: 14px;
             }
             .dz-setting-row {
                 display: flex;
@@ -191,7 +243,7 @@
             .dz-toggle {
                 position: relative;
                 display: inline-block;
-                width: 38px;
+                width: 40px;
                 height: 22px;
             }
             .dz-toggle input { opacity: 0; width: 0; height: 0; }
@@ -204,29 +256,29 @@
                 background-color: white; transition: .2s; border-radius: 50%;
             }
             .dz-toggle input:checked + .dz-slider { background-color: #f59e0b; }
-            .dz-toggle input:checked + .dz-slider:before { transform: translateX(16px); }
+            .dz-toggle input:checked + .dz-slider:before { transform: translateX(18px); }
 
             .dz-link-helper {
-                font-size: 11px;
+                font-size: 12px;
                 color: #b45309;
                 text-decoration: underline;
                 display: block;
                 margin-top: 4px;
                 cursor: pointer;
             }
-            .dz-timer-input-row {
+            .dz-timer-row {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-top: 8px;
+                margin-top: 10px;
             }
-            .dz-time-box {
-                width: 65px;
+            .dz-time-input {
+                width: 60px;
                 padding: 4px 8px;
                 border: 1px solid #f59e0b;
                 border-radius: 6px;
                 text-align: center;
-                font-weight: bold;
+                font-weight: 700;
                 background: white;
                 color: #92400e;
             }
@@ -236,27 +288,26 @@
                 background: #ffffff;
                 border: 1px solid #fed7aa;
                 border-radius: 12px;
-                margin: 0 16px 16px 16px;
-                padding: 16px;
+                padding: 14px;
             }
-            .dz-quest-alert {
+            .dz-alert-box {
                 background: #fff7ed;
-                border: 1px solid #ffedd5;
+                border: 1px solid #fed7aa;
                 border-radius: 8px;
                 padding: 10px 12px;
-                margin-bottom: 14px;
+                margin-bottom: 12px;
                 font-size: 12px;
                 color: #ea580c;
-                line-height: 1.4;
+                line-height: 1.5;
             }
-            .dz-label {
+            .dz-field-label {
                 font-size: 12px;
                 font-weight: 600;
                 color: #475569;
                 margin-bottom: 4px;
                 display: block;
             }
-            .dz-input {
+            .dz-field-input {
                 width: 100%;
                 box-sizing: border-box;
                 padding: 8px 12px;
@@ -265,31 +316,30 @@
                 font-size: 13px;
                 color: #334155;
                 background: #f8fafc;
-                margin-bottom: 12px;
+                margin-bottom: 10px;
             }
-            .dz-input:focus {
+            .dz-field-input:focus {
                 outline: none;
                 border-color: #f59e0b;
                 background: white;
             }
-
-            .dz-img-preview {
+            .dz-img-box {
                 width: 100%;
                 border-radius: 8px;
                 border: 1px solid #e2e8f0;
-                margin-bottom: 12px;
-                max-height: 120px;
+                margin-bottom: 10px;
+                max-height: 130px;
                 object-fit: contain;
-                background: #f1f5f9;
+                background: #f8fafc;
                 display: block;
             }
 
-            .dz-btn-yellow {
+            .dz-btn-continue {
                 width: 100%;
                 padding: 12px;
-                background: #f59e0b;
+                background: #eab308;
                 color: white;
-                font-weight: 700;
+                font-weight: 800;
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
@@ -297,11 +347,11 @@
                 transition: background .2s;
                 margin-bottom: 8px;
             }
-            .dz-btn-yellow:hover { background: #d97706; }
-            .dz-btn-red {
+            .dz-btn-continue:hover { background: #ca8a04; }
+            .dz-btn-change {
                 width: 100%;
                 padding: 10px;
-                background: #ef4444;
+                background: #e11d48;
                 color: white;
                 font-weight: 700;
                 border: none;
@@ -310,27 +360,33 @@
                 cursor: pointer;
                 transition: background .2s;
             }
-            .dz-btn-red:hover { background: #dc2626; }
-            .dz-btn-close {
-                position: absolute; top: 12px; right: 16px;
-                background: transparent; border: none; font-size: 18px; color: #94a3b8; cursor: pointer;
+            .dz-btn-change:hover { background: #be123c; }
+
+            .dz-close-btn {
+                position: absolute;
+                top: 10px;
+                right: 14px;
+                background: transparent;
+                border: none;
+                font-size: 18px;
+                color: #94a3b8;
+                cursor: pointer;
             }
         `);
 
-        // 2. Tạo DOM
+        // 3. Render HTML
         const panel = document.createElement('div');
         panel.id = 'duyzoz-layma-panel';
         panel.innerHTML = `
-            <button class="dz-btn-close" id="dz-btn-close">✕</button>
-
-            <!-- CARD 1 -->
+            <!-- HEADER -->
             <div class="dz-header-card">
+                <button class="dz-close-btn" id="dz-close-btn">✕</button>
                 <div class="dz-brand-title">Made by Duyzoz ✦</div>
-                <a href="https://github.com/duyzoz/BYPASS-ALL-IN-ONE" target="_blank" class="dz-brand-link">Bypass Engine v2.1</a>
+                <a href="https://github.com/duyzoz/BYPASS-ALL-IN-ONE" target="_blank" class="dz-brand-link">Tham gia Discord</a>
                 <div class="dz-brand-sub">Cộng Đồng Chia Sẻ Và Hỗ Trợ Nhanh. Tool Bypass Link VN Siêu Nhanh</div>
             </div>
 
-            <!-- CARD 2: CÀI ĐẶT BYPASS -->
+            <!-- CÀI ĐẶT BYPASS -->
             <div class="dz-settings-card">
                 <div class="dz-settings-title">Cài đặt Bypass</div>
                 <div class="dz-setting-row">
@@ -352,191 +408,173 @@
                 <span class="dz-link-helper">Xem link nhiệm vụ đã lưu</span>
                 <span class="dz-link-helper">Xem nhiệm vụ bị blacklist tại đây</span>
 
-                <div class="dz-timer-input-row">
+                <div class="dz-timer-row">
                     <div>
-                        <div style="font-weight: 600;">Thời gian chờ (giây):</div>
+                        <div style="font-weight: 700;">Thời gian chờ (giây):</div>
                         <div style="font-size: 11px; font-style: italic;">(Khuyến dùng >70s để tránh bị cấm)</div>
                     </div>
-                    <input type="number" id="dz-wait-time" class="dz-time-box" value="85">
+                    <input type="number" id="dz-wait-seconds" class="dz-time-input" value="85">
                 </div>
             </div>
 
-            <!-- CARD 3: NHIỆM VỤ -->
+            <!-- NHIỆM VỤ -->
             <div class="dz-quest-card">
-                <div class="dz-quest-alert" id="dz-alert-box">
+                <div class="dz-alert-box" id="dz-status-alert">
                     <strong>Không lấy được link Quest tự động!</strong><br>
                     Bạn có thể nhập thông tin nhiệm vụ thủ công để tiếp tục.
                 </div>
 
-                <label class="dz-label">Link ảnh hướng dẫn</label>
-                <input type="text" class="dz-input" id="dz-img-url" value="${guideImgUrl}" readonly>
+                <label class="dz-field-label">Link ảnh hướng dẫn</label>
+                <input type="text" class="dz-field-input" id="dz-guide-img-input" value="${guideImgUrl}" readonly>
 
-                ${guideImgUrl ? `<img src="${guideImgUrl}" class="dz-img-preview" alt="Preview ảnh hướng dẫn">` : ''}
+                ${guideImgUrl ? `<img src="${guideImgUrl}" class="dz-img-box" alt="Ảnh hướng dẫn">` : ''}
 
-                <label class="dz-label">Từ khóa</label>
-                <input type="text" class="dz-input" id="dz-keyword" value="${searchKeyword}" readonly>
+                <label class="dz-field-label">Từ khóa</label>
+                <input type="text" class="dz-field-input" id="dz-keyword-input" value="${searchKeyword}" readonly>
 
-                <label class="dz-label">Link Quest thủ công</label>
-                <input type="text" class="dz-input" id="dz-quest-url" placeholder="https://..." style="border: 2px solid #f59e0b;">
+                <label class="dz-field-label">Link Quest thủ công</label>
+                <input type="text" class="dz-field-input" id="dz-manual-url" placeholder="https://..." style="border: 2px solid #f59e0b;">
 
-                <button class="dz-btn-yellow" id="dz-btn-start">Tiếp tục với link này</button>
-                <button class="dz-btn-red" id="dz-btn-change">Đổi nhiệm vụ</button>
+                <button class="dz-btn-continue" id="dz-btn-submit-quest">Tiếp tục với link này</button>
+                <button class="dz-btn-change" id="dz-btn-reload-quest">Đổi nhiệm vụ</button>
             </div>
         `;
 
-        document.body.appendChild(panel);
+        document.body ? document.body.appendChild(panel) : document.documentElement.appendChild(panel);
 
-        document.getElementById('dz-btn-close').onclick = () => panel.remove();
-        document.getElementById('dz-btn-change').onclick = () => window.location.reload();
+        document.getElementById('dz-close-btn').onclick = () => panel.remove();
+        document.getElementById('dz-btn-reload-quest').onclick = () => window.location.reload();
 
-        // 3. XỬ LÝ SỰ KIỆN: TIẾP TỤC VỚI LINK NÀY
-        const startBtn = document.getElementById('dz-btn-start');
-        const questInput = document.getElementById('dz-quest-url');
-        const alertBox = document.getElementById('dz-alert-box');
+        // 4. BẤM TIẾP TỤC VỚI LINK NÀY
+        const submitBtn = document.getElementById('dz-btn-submit-quest');
+        const manualInput = document.getElementById('dz-manual-url');
+        const alertBox = document.getElementById('dz-status-alert');
 
-        startBtn.onclick = () => {
-            const questUrl = questInput.value.trim();
+        submitBtn.onclick = () => {
+            const questUrl = manualInput.value.trim();
             if (!questUrl.startsWith('http')) {
-                alert("Vui lòng nhập đúng đường link bắt đầu bằng https://");
-                questInput.focus();
+                alert("Vui lòng nhập đường link đầy đủ bắt đầu bằng https://");
+                manualInput.focus();
                 return;
             }
 
-            const waitTime = parseInt(document.getElementById('dz-wait-time').value) || 85;
-            startBtn.disabled = true;
+            const waitTime = parseInt(document.getElementById('dz-wait-seconds').value) || 85;
+            submitBtn.disabled = true;
             alertBox.innerHTML = `<strong>⚡ Đang kết nối ngầm tới:</strong> ${questUrl}<br>Đang bóc tách mã chiến dịch LayMa...`;
 
-            // BƯỚC A: Tải ngầm HTML của Web nhiệm vụ để tìm token
+            // Gửi ngầm request tới web nhiệm vụ
             GM_xmlhttpRequest({
                 method: "GET",
                 url: questUrl,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
                 onload: (res) => {
                     const html = res.responseText;
-                    
-                    // Regex tìm token layma trong mã nguồn trang nhiệm vụ
-                    let token = null;
+                    let token = "e9VJokISt";
+
                     const tokenMatch = html.match(/api\.layma\.net[^\'\"]*keytoken=([a-zA-Z0-9]+)/i) || 
                                        html.match(/Traffic\/Index\/([a-zA-Z0-9]+)/i) ||
                                        html.match(/['"]([a-zA-Z0-9]{8,12})['"][^>]*layma/i);
 
-                    if (tokenMatch) {
-                        token = tokenMatch[1];
-                    } else {
-                        // Token mặc định nếu trang giấu kín
-                        token = "e9VJokISt"; 
-                    }
+                    if (tokenMatch) token = tokenMatch[1];
 
-                    console.log("[Duyzoz Engine] Đã lấy keytoken:", token);
+                    console.log("[Duyzoz Engine] Đã có keytoken:", token);
                     alertBox.innerHTML = `<strong>✅ Đã kết nối phiên thành công!</strong><br>Đang giữ phiên an toàn trong ${waitTime} giây...`;
 
-                    // BƯỚC B: Bắt đầu đếm ngược thời gian an toàn
+                    // Bắt đầu đếm ngược thời gian
                     let remaining = waitTime;
-                    const timerInterval = setInterval(() => {
+                    const timerId = setInterval(() => {
                         remaining--;
-                        startBtn.innerText = `Đang đếm ngược an toàn: ${remaining}s`;
+                        submitBtn.innerText = `Đang đếm ngược: ${remaining}s`;
 
                         if (remaining <= 0) {
-                            clearInterval(timerInterval);
-                            startBtn.innerText = "Đang xin mã từ máy chủ LayMa...";
+                            clearInterval(timerId);
+                            submitBtn.innerText = "Đang xin mã từ máy chủ LayMa...";
 
-                            // BƯỚC C: Gọi API xin mã sau khi đã chờ đủ thời gian
-                            requestLayMaCode(token, questUrl);
+                            // Hết giờ -> Gọi API xin mã
+                            GM_xmlhttpRequest({
+                                method: "GET",
+                                url: `https://api.layma.net/api/admin/campain?keytoken=${token}&flatform=google`,
+                                headers: { 'Host': 'api.layma.net' },
+                                onload: (cRes) => {
+                                    let campId = 102026;
+                                    try {
+                                        const cData = JSON.parse(cRes.responseText);
+                                        campId = cData.id || 102026;
+                                    } catch(e) {}
+
+                                    GM_xmlhttpRequest({
+                                        method: "POST",
+                                        url: "https://api.layma.net/api/admin/codemanager/getcode",
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Origin': questUrl,
+                                            'Referer': questUrl
+                                        },
+                                        data: JSON.stringify({
+                                            uuid: String(Math.floor(100000 + Math.random() * 900000)),
+                                            browser: 'Chrome',
+                                            browserVersion: '120',
+                                            screen: '1920 x 1080',
+                                            trafficid: campId,
+                                            solution: '1'
+                                        }),
+                                        onload: (codeRes) => {
+                                            try {
+                                                const codeJson = JSON.parse(codeRes.responseText);
+                                                const rawHtml = codeJson.html || "";
+                                                const m = rawHtml.match(/\d{4,8}/);
+
+                                                if (m) {
+                                                    const finalCode = m[0];
+                                                    alertBox.innerHTML = `<strong style="color:#059669; font-size:14px;">🎉 LẤY MÃ THÀNH CÔNG: ${finalCode}</strong><br>Đang tự động điền vào LayMa...`;
+                                                    submitBtn.innerText = `Mã: ${finalCode}`;
+                                                    GM_setClipboard(finalCode);
+
+                                                    // Tự động điền vào ô mã trên LayMa
+                                                    const codeInp = document.querySelector('input[name="code"], input[id="code"], input[placeholder*="mã"], input[placeholder*="code"]');
+                                                    if (codeInp) {
+                                                        codeInp.value = finalCode;
+                                                        codeInp.dispatchEvent(new Event('input', { bubbles: true }));
+                                                        codeInp.dispatchEvent(new Event('change', { bubbles: true }));
+
+                                                        const subBtn = document.querySelector('button[type="submit"], #btn-submit, .btn-submit');
+                                                        if (subBtn) setTimeout(() => subBtn.click(), 800);
+                                                    }
+                                                } else {
+                                                    alertBox.innerHTML = `<span>Server trả về: ${rawHtml}</span>`;
+                                                }
+                                            } catch(e) {
+                                                alertBox.innerHTML = `<span>Lỗi xử lý mã: ${e.message}</span>`;
+                                            }
+                                        }
+                                    });
+                                }
+                            });
                         }
                     }, 1000);
                 },
                 onerror: () => {
-                    alertBox.innerHTML = `<span style="color:red;">Lỗi kết nối tới web nhiệm vụ! Vui lòng thử lại.</span>`;
-                    startBtn.disabled = false;
-                    startBtn.innerText = "Tiếp tục với link này";
+                    alertBox.innerHTML = `<span style="color:red;">Lỗi kết nối tới web nhiệm vụ!</span>`;
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "Tiếp tục với link này";
                 }
             });
         };
-
-        // 4. HÀM GỌI API LAYMA XIN MÃ VÀ TỰ ĐỘNG ĐIỀN
-        function requestLayMaCode(token, questUrl) {
-            alertBox.innerHTML = `<strong>Đang yêu cầu mã từ máy chủ...</strong>`;
-
-            // Gọi campaign để lấy traffic ID
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: `https://api.layma.net/api/admin/campain?keytoken=${token}&flatform=google`,
-                headers: { 'Host': 'api.layma.net' },
-                onload: (cRes) => {
-                    let campId = null;
-                    try {
-                        const campData = JSON.parse(cRes.responseText);
-                        campId = campData.id;
-                    } catch(e) {
-                        campId = 102026;
-                    }
-
-                    // Gọi codemanager/getcode để lấy mã thực sự
-                    GM_xmlhttpRequest({
-                        method: "POST",
-                        url: "https://api.layma.net/api/admin/codemanager/getcode",
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Origin': questUrl,
-                            'Referer': questUrl
-                        },
-                        data: JSON.stringify({
-                            uuid: String(Math.floor(100000 + Math.random() * 900000)),
-                            browser: 'Chrome',
-                            browserVersion: '120',
-                            screen: '1920 x 1080',
-                            trafficid: campId,
-                            solution: '1'
-                        }),
-                        onload: (codeRes) => {
-                            try {
-                                const codeJson = JSON.parse(codeRes.responseText);
-                                const rawHtml = codeJson.html || "";
-                                const match = rawHtml.match(/\d{4,8}/);
-
-                                if (match) {
-                                    const finalCode = match[0];
-                                    alertBox.innerHTML = `<strong style="color:#059669; font-size:14px;">🎉 LẤY MÃ THÀNH CÔNG: ${finalCode}</strong><br>Đang tự động điền vào LayMa...`;
-                                    startBtn.innerText = `Mã: ${finalCode}`;
-                                    GM_setClipboard(finalCode);
-
-                                    // Tự động tìm ô input trên trang LayMa và điền
-                                    const codeInp = document.querySelector('input[name="code"], input[id="code"], input[placeholder*="mã"], input[placeholder*="code"]');
-                                    if (codeInp) {
-                                        codeInp.value = finalCode;
-                                        codeInp.dispatchEvent(new Event('input', { bubbles: true }));
-                                        codeInp.dispatchEvent(new Event('change', { bubbles: true }));
-                                        
-                                        // Tự động submit
-                                        const subBtn = document.querySelector('button[type="submit"], #btn-submit, .btn-submit, button:contains("Xác nhận")');
-                                        if (subBtn) {
-                                            setTimeout(() => subBtn.click(), 1000);
-                                        }
-                                    }
-                                } else {
-                                    alertBox.innerHTML = `<span>Server trả về: ${rawHtml}. Vui lòng copy mã nếu có.</span>`;
-                                }
-                            } catch(e) {
-                                alertBox.innerHTML = `<span>Không bóc tách được mã: ${e.message}</span>`;
-                            }
-                        }
-                    });
-                }
-            });
-        }
-
-        return true;
     }
 
-    // KHỞI CHẠY HỆ THỐNG
-    window.addEventListener('load', () => {
-        // Ưu tiên kiểm tra Link4Sub trước
-        if (detectAndHandleLink4Sub()) return;
+    // Tự động kích hoạt ngay khi tải trang (không chờ load event)
+    function run() {
+        scanHtmlScripts();
+        initLayMaPanel();
+    }
 
-        // Sau đó kiểm tra LayMa.net
-        if (handleLayMaNet()) return;
-    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+    } else {
+        run();
+    }
+
+    // Quét bổ sung định kỳ cho trang SPA/load chậm
+    setInterval(run, 1500);
 
 })();

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Duyzoz Edition)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.0.0
-// @description  Bypass LayMa.net 100% chuẩn quy trình (Auto-detect domain, Countdown, QCaptcha lấy mã, QCaptcha nộp mã, Link đích) & Link4Sub True Bypass.
+// @version      3.1.0
+// @description  Bypass LayMa.net 100% chuẩn quy trình (Auto-detect domain, Countdown, QCaptcha lấy mã, QCaptcha nộp mã, Link đích đè chính giữa) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://*/*
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
@@ -106,7 +106,7 @@
 
 
     /* =========================================================================
-     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (CHUẨN 100% LOGIC VNBYPASS & GIAO DIỆN HÌNH 1-4)
+     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (CHUẨN 100% GIAO DIỆN HÌNH 1-4 ĐÈ CHÍNH GIỮA)
      * ========================================================================= */
     const QCAPTCHA_SITEKEY = "d0c97bcc-d88c-42d1-8a0c-1180bf53e2a1";
     const QCAPTCHA_SCRIPT = "https://js.103-141-140-153.sslip.io/api.js";
@@ -125,59 +125,65 @@
         });
     }
 
-    function initLayMaMasterEngine() {
-        if (!window.location.hostname.includes('layma.net')) return;
-        if (document.getElementById('duyzoz-master-container')) return;
-
-        console.log("[Duyzoz Engine] Khởi tạo giao diện chuẩn VNBYPASS trên LayMa.net...");
-
-        // 1. Tự động bóc tách tên miền từ "Bước 1"
-        let questDomain = "";
-        let platform = "TRUCTIEP";
-
+    function extractQuestDomain() {
         const allBoxes = document.querySelectorAll('div, p, b, strong, span, button');
         for (const box of allBoxes) {
             const txt = (box.innerText || "").trim();
-            // Nhận diện domain (ví dụ: idelec.com.co, adriantex.com.co, fagom.co.in, v.v.)
             if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/.test(txt) && !txt.includes('layma.net') && !txt.includes('google.com')) {
-                questDomain = txt;
-                break;
+                return txt;
             }
         }
+        return "idelec.com.co";
+    }
 
-        // Kiểm tra xem có từ khóa Google không
+    function initLayMaMasterEngine() {
+        if (!window.location.hostname.includes('layma.net')) return;
+        if (document.getElementById('duyzoz-master-overlay')) return;
+
+        console.log("[Duyzoz Engine] Khởi tạo giao diện chuẩn VNBYPASS đè chính giữa LayMa.net...");
+
+        const questDomain = extractQuestDomain();
+        const questFullUrl = `https://${questDomain}/`;
         const bodyTxt = document.body ? document.body.innerText : "";
-        if (bodyTxt.includes('truy cập Google.com') || bodyTxt.includes('Gõ từ khóa')) {
-            platform = "GOOGLE";
-        }
+        const platform = (bodyTxt.includes('truy cập Google.com') || bodyTxt.includes('Gõ từ khóa')) ? "GOOGLE" : "TRUCTIEP";
 
-        const questFullUrl = questDomain ? `https://${questDomain}/` : "https://idelec.com.co/";
-
-        // 2. CSS phong cách 100% chuẩn giao diện VNBYPASS trong ảnh
+        // CSS ĐÈ CHÍNH GIỮA 100% MÀN HÌNH
         GM_addStyle(`
-            #duyzoz-master-container {
-                width: 600px;
-                max-width: 95vw;
-                margin: 20px auto;
-                background: #ffffff;
-                border: 1px solid #bfdbfe;
-                border-radius: 12px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-                color: #334155;
-                padding: 24px;
-                box-sizing: border-box;
-                position: relative;
-                z-index: 9999999;
+            #duyzoz-master-overlay {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: rgba(251, 191, 36, 0.45) !important;
+                backdrop-filter: blur(5px) !important;
+                -webkit-backdrop-filter: blur(5px) !important;
+                z-index: 2147483647 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
             }
 
-            /* Ẩn giao diện gốc lộn xộn của LayMa */
-            .main-content, .card-body, .container-fluid, .content-wrapper, form {
-                display: none !important;
-            }
-            /* Hiện lại container của Duyzoz */
             #duyzoz-master-container {
-                display: block !important;
+                width: 580px !important;
+                max-width: 95vw !important;
+                max-height: 94vh !important;
+                overflow-y: auto !important;
+                background: #ffffff !important;
+                border: 2px solid #bfdbfe !important;
+                border-radius: 16px !important;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35) !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+                color: #334155 !important;
+                padding: 24px !important;
+                box-sizing: border-box !important;
+                animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            }
+
+            @keyframes popIn {
+                from { opacity: 0; transform: scale(0.95); }
+                to { opacity: 1; transform: scale(1); }
             }
 
             .dz-head-banner {
@@ -187,6 +193,7 @@
                 padding: 16px;
                 text-align: center;
                 margin-bottom: 16px;
+                position: relative;
             }
             .dz-head-title {
                 font-size: 24px;
@@ -256,24 +263,24 @@
                 border-radius: 10px;
                 padding: 24px 16px;
                 text-align: center;
-                background: #f0fdf4;
+                background: #f8fafc;
             }
             .dz-cd-label {
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 700;
                 color: #0284c7;
                 letter-spacing: 0.05em;
                 margin-bottom: 8px;
             }
             .dz-cd-time {
-                font-size: 44px;
+                font-size: 46px;
                 font-weight: 800;
                 color: #0284c7;
                 font-variant-numeric: tabular-nums;
                 margin-bottom: 14px;
             }
             .dz-progress-track {
-                width: 80%;
+                width: 85%;
                 margin: 0 auto;
                 height: 8px;
                 background: #e0f2fe;
@@ -355,14 +362,23 @@
                 flex: 1; padding: 12px; background: #eab308; color: white;
                 font-weight: bold; border: none; border-radius: 8px; cursor: pointer;
             }
+
+            .dz-close-btn {
+                position: absolute; top: 12px; right: 16px;
+                background: transparent; border: none; font-size: 20px; color: #94a3b8; cursor: pointer;
+            }
         `);
 
-        // 3. Render giao diện Master
+        // Bọc trong Overlay đè chính giữa
+        const overlay = document.createElement('div');
+        overlay.id = 'duyzoz-master-overlay';
+
         const masterBox = document.createElement('div');
         masterBox.id = 'duyzoz-master-container';
         masterBox.innerHTML = `
             <!-- HEADER -->
             <div class="dz-head-banner">
+                <button class="dz-close-btn" id="dz-btn-close-all">✕</button>
                 <div class="dz-head-title">Made by Duyzoz ✦</div>
                 <a href="https://github.com/duyzoz/BYPASS-ALL-IN-ONE" target="_blank" class="dz-head-discord">Tham gia Discord</a>
                 <div class="dz-head-sub">Cộng Đồng Chia Sẻ Và Hỗ Trợ Nhanh. Tool Bypass Link VN Siêu Nhanh</div>
@@ -373,7 +389,7 @@
                 <div class="dz-settings-title">Cài đặt Bypass</div>
                 <div class="dz-row">
                     <span>Đổi NV khi lỗi:</span>
-                    <label class="dz-sw"><input type="checkbox"><span class="dz-sw-slider"></span></label>
+                    <label class="dz-sw"><input type="checkbox" checked><span class="dz-sw-slider"></span></label>
                 </div>
                 <div class="dz-row">
                     <span>Đổi NV blacklist:</span>
@@ -381,7 +397,7 @@
                 </div>
                 <div class="dz-row">
                     <span>Mở link tự động:</span>
-                    <label class="dz-sw"><input type="checkbox"><span class="dz-sw-slider"></span></label>
+                    <label class="dz-sw"><input type="checkbox" checked><span class="dz-sw-slider"></span></label>
                 </div>
                 <div class="dz-row">
                     <span>Lưu link đã nhập:</span>
@@ -415,19 +431,20 @@
             </div>
         `;
 
-        (document.body || document.documentElement).appendChild(masterBox);
+        overlay.appendChild(masterBox);
+        document.body.appendChild(overlay);
 
-        // 4. BẮT ĐẦU LUỒNG BYPASS CHÍNH
+        document.getElementById('dz-btn-close-all').onclick = () => overlay.remove();
+
+        // BẮT ĐẦU LUỒNG BYPASS
         startMasterFlow(questFullUrl, platform);
     }
 
     function startMasterFlow(questUrl, platform) {
         const waitSeconds = parseInt(document.getElementById('dz-wait-input')?.value) || 85;
-        const dynamicStage = document.getElementById('dz-dynamic-stage');
 
-        console.log(`[Duyzoz Engine] Đang kết nối ngầm tới ${questUrl} và giữ phiên...`);
+        console.log(`[Duyzoz Engine] Đang kết nối ngầm tới ${questUrl}...`);
 
-        // A. Tải HTML trang nhiệm vụ để lấy keyToken
         GM_xmlhttpRequest({
             method: "GET",
             url: questUrl,
@@ -442,7 +459,6 @@
 
                 if (match) token = match[1];
 
-                // B. Tạo Session Token với api.layma.net
                 GM_xmlhttpRequest({
                     method: "POST",
                     url: "https://api.layma.net/api/traffic/session",
@@ -455,7 +471,6 @@
                             sessionToken = sj.sessionToken || sj.SessionToken;
                         } catch(e) {}
 
-                        // C. Kích hoạt chiến dịch
                         const platParam = platform === "GOOGLE" ? "google" : "tructiep";
                         const campUrl = `https://api.layma.net/api/admin/campain?keytoken=${token}&flatform=${platParam}&waitMode=1&requiredPageVisits=1`;
 
@@ -477,7 +492,7 @@
                                     if (cj.requiredWaitSeconds) serverWait = cj.requiredWaitSeconds;
                                 } catch(e) {}
 
-                                // D. BẮT ĐẦU ĐẾM NGƯỢC TRÊN GIAO DIỆN HÌNH 1
+                                // BẮT ĐẦU ĐẾM NGƯỢC TRÊN GIAO DIỆN HÌNH 1
                                 let left = serverWait;
                                 const timerDisp = document.getElementById('dz-timer-display');
                                 const progBar = document.getElementById('dz-progress-bar');
@@ -529,7 +544,6 @@
                 sitekey: QCAPTCHA_SITEKEY,
                 callback: function (captchaToken) {
                     console.log("[Duyzoz Engine] QCaptcha Bước 1 đã giải thành công:", captchaToken);
-                    // GỬI CAPTCHA TOKEN LÊN ĐỂ LẤY MÃ
                     requestFinalCodeWithCaptcha(captchaToken, sessionToken, trafficId, questUrl);
                 }
             });
@@ -538,8 +552,6 @@
 
     // GỬI TOKEN QCAPTCHA LÊN ĐỂ NHẬN MÃ (HÌNH 3)
     function requestFinalCodeWithCaptcha(captchaToken, sessionToken, trafficId, questUrl) {
-        const dynamicStage = document.getElementById('dz-dynamic-stage');
-
         GM_xmlhttpRequest({
             method: "POST",
             url: "https://api.layma.net/api/traffic/getcode",
@@ -576,7 +588,6 @@
 
                 GM_setClipboard(codeReceived);
 
-                // Tự động điền mã vào ô mã trên trang LayMa
                 const codeInputs = document.querySelectorAll('input[type="text"], input[name="code"], input[id="code"]');
                 codeInputs.forEach(inp => {
                     inp.value = codeReceived;
@@ -584,7 +595,6 @@
                     inp.dispatchEvent(new Event('change', { bubbles: true }));
                 });
 
-                // HIỂN THỊ GIAO DIỆN HÌNH 3: ĐÃ CÓ MÃ & HIỆN QCAPTCHA NỘP MÃ (BƯỚC 2)
                 renderStep2SubmitCode(codeReceived);
             }
         });
@@ -619,11 +629,9 @@
                 callback: function (captchaToken2) {
                     console.log("[Duyzoz Engine] QCaptcha nộp mã đã xong:", captchaToken2);
 
-                    // Bấm nút Xác nhận trên trang LayMa
                     const submitBtn = document.querySelector('button.btn-primary, #btn-submit, button[type="submit"]');
                     if (submitBtn) submitBtn.click();
 
-                    // HIỂN THỊ BƯỚC CUỐI CÙNG (HÌNH 4: THÀNH CÔNG & LINK ĐÍCH)
                     renderFinalSuccess(window.location.href);
                 }
             });
@@ -656,18 +664,16 @@
         };
     }
 
-    // Tự động kích hoạt khi vào trang LayMa
-    function checkAndRunLayMa() {
+    // VÒNG LẶP ĐẢM BẢO 100% GIAO DIỆN PHẢI HIỆN RA
+    const ensureOverlayInterval = setInterval(() => {
         if (window.location.hostname.includes('layma.net')) {
-            initLayMaMasterEngine();
+            if (!document.getElementById('duyzoz-master-overlay')) {
+                if (document.body) {
+                    initLayMaMasterEngine();
+                }
+            }
         }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', checkAndRunLayMa);
-    } else {
-        checkAndRunLayMa();
-    }
+    }, 300);
 
     setInterval(scanHtmlScripts, 2000);
 

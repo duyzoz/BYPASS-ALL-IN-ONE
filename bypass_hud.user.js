@@ -5,6 +5,8 @@
 // @description  Tự động vượt link rút gọn, giữ phiên ngầm an toàn, đè giao diện Glassmorphism HUD siêu đẹp.
 // @author       Duyzoz
 // @match        *://*/*
+// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
+// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setClipboard
 // @grant        GM_addStyle

@@ -1,0 +1,27 @@
+{
+  "name": "bypass-all-in-one",
+  "version": "2.0.0",
+  "description": "Bypass Short Link All-in-One Tool - JavaScript & Tampermonkey Edition by Duyzoz",
+  "main": "bypass_tool.js",
+  "scripts": {
+    "start": "node bypass_tool.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duyzoz/BYPASS-ALL-IN-ONE.git"
+  },
+  "keywords": [
+    "bypass",
+    "shortlink",
+    "traffic-user",
+    "tampermonkey",
+    "userscript",
+    "duyzoz"
+  ],
+  "author": "Duyzoz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/duyzoz/BYPASS-ALL-IN-ONE/issues"
+  },
+  "homepage": "https://github.com/duyzoz/BYPASS-ALL-IN-ONE#readme"
+}

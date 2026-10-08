@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Duyzoz Edition)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      2.2.0
-// @description  Tự động vượt link Link4Sub (Trích xuất link đích 100%), LayMa.net (Giao diện chuẩn Hình 3 Made by Duyzoz), đếm ngược an toàn và tự điền mã.
+// @version      2.3.0
+// @description  Tự động vượt link Link4Sub (Trích xuất link gốc 100%), LayMa.net (Giao diện chuẩn Hình 3 đè giữa màn hình, tự tìm link nhiệm vụ, tự đổi NV khi lỗi, giải mã API chuẩn).
 // @author       Duyzoz
 // @match        *://*/*
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
@@ -28,33 +28,29 @@
         console.log("[Duyzoz Engine] Đã giải mã thành công link đích Link4Sub:", targetUrl);
         GM_setClipboard(targetUrl);
 
-        // Hiển thị Banner thành công cực đẹp
         const banner = document.createElement('div');
         banner.style.cssText = `
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: linear-gradient(135deg, #10b981, #059669);
-            color: #ffffff; padding: 16px 28px; border-radius: 16px;
+            color: #ffffff; padding: 18px 32px; border-radius: 16px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 14px; font-weight: bold;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3), 0 0 0 2px rgba(255,255,255,0.2);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 0 2px rgba(255,255,255,0.3);
             z-index: 2147483647; text-align: center; line-height: 1.6;
         `;
         banner.innerHTML = `
-            <div style="font-size: 16px; margin-bottom: 4px;">🎉 MADE BY DUYZOZ: ĐÃ BYPASS THÀNH CÔNG!</div>
-            <div style="font-size: 12px; color: #d1fae5; font-weight: normal; margin-bottom: 10px;">Link đích: <span style="text-decoration: underline;">${targetUrl.substring(0, 45)}...</span> (Đã copy)</div>
-            <a href="${targetUrl}" style="background: white; color: #059669; padding: 6px 16px; border-radius: 999px; text-decoration: none; font-size: 13px; font-weight: 800; display: inline-block;">ĐI ĐẾN LINK ĐÍCH NGAY ➜</a>
+            <div style="font-size: 18px; margin-bottom: 4px;">🎉 MADE BY DUYZOZ: ĐÃ BYPASS THÀNH CÔNG!</div>
+            <div style="font-size: 12px; color: #d1fae5; font-weight: normal; margin-bottom: 12px;">Link đích: <span style="text-decoration: underline;">${targetUrl.substring(0, 50)}...</span> (Đã copy)</div>
+            <a href="${targetUrl}" style="background: white; color: #059669; padding: 8px 20px; border-radius: 999px; text-decoration: none; font-size: 13px; font-weight: 800; display: inline-block;">ĐI ĐẾN LINK ĐÍCH NGAY ➜</a>
         `;
-        document.body ? document.body.appendChild(banner) : document.documentElement.appendChild(banner);
+        (document.body || document.documentElement).appendChild(banner);
 
-        // Tự động chuyển hướng sau 1.5 giây
         setTimeout(() => {
             window.location.href = targetUrl;
         }, 1500);
     }
 
-    // 1. Hook XMLHttpRequest & Fetch để bắt gói tin JSON chứa link đích của Link4Sub
     function hookNetworkForLink4Sub() {
-        // Hook Fetch
         const origFetch = window.fetch;
         window.fetch = async function (...args) {
             const response = await origFetch.apply(this, args);
@@ -65,7 +61,6 @@
             return response;
         };
 
-        // Hook XHR
         const origXhrOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function () {
             this.addEventListener('load', function () {
@@ -77,11 +72,8 @@
         };
     }
 
-    // Quét chuỗi Base64 đại diện cho URL (aHR0cHM6Ly = https://, aHR0cDov = http://)
     function scanTextForEncodedUrl(text) {
         if (!text || link4SubFound) return;
-
-        // Trường hợp A: JSON chứa trường lnk1
         try {
             const json = JSON.parse(text);
             const rawUrl = json?.data?.data?.lnk?.lnk1?.url || json?.lnk?.lnk1?.url;
@@ -94,7 +86,6 @@
             }
         } catch (e) {}
 
-        // Trường hợp B: Quét chuỗi Base64 trực tiếp
         const base64Regex = /(aHR0cHM6Ly[A-Za-z0-9+/=]{10,}|aHR0cDov[A-Za-z0-9+/=]{10,})/g;
         let match;
         while ((match = base64Regex.exec(text)) !== null) {
@@ -108,32 +99,31 @@
         }
     }
 
-    // Quét toàn bộ mã nguồn trang HTML để tìm link ẩn
     function scanHtmlScripts() {
-        const scripts = document.querySelectorAll('script');
-        scripts.forEach(s => {
+        document.querySelectorAll('script').forEach(s => {
             if (s.textContent) scanTextForEncodedUrl(s.textContent);
         });
-        scanTextForEncodedUrl(document.documentElement.innerHTML);
+        if (document.documentElement) scanTextForEncodedUrl(document.documentElement.innerHTML);
     }
 
     hookNetworkForLink4Sub();
 
 
     /* =========================================================================
-     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (CHUẨN 100% GIAO DIỆN HÌNH 3 - MADE BY DUYZOZ)
+     *  PHẦN 2: BỘ XỬ LÝ LAYMA.NET (CHUẨN 100% GIAO DIỆN HÌNH 3 - ĐÈ CHÍNH GIỮA)
      * ========================================================================= */
     function initLayMaPanel() {
         if (!window.location.hostname.includes('layma.net')) return;
         if (document.getElementById('duyzoz-layma-panel')) return;
 
-        console.log("[Duyzoz Engine] Đang dựng giao diện LayMa.net chuẩn Hình 3...");
+        console.log("[Duyzoz Engine] Đang dựng giao diện LayMa.net đè giữa màn hình...");
 
-        // 1. Tự động bóc tách Link ảnh hướng dẫn và Từ khóa có trên trang
+        // 1. Tự động bóc tách thông tin từ trang LayMa
         let guideImgUrl = "";
         let searchKeyword = "Không có từ khóa";
+        let autoDetectedQuestUrl = "";
 
-        // Quét ảnh
+        // Tìm ảnh hướng dẫn
         const imgs = document.querySelectorAll('img');
         for (const img of imgs) {
             if (img.src && (img.src.includes('layma.net/media') || img.src.includes('posts') || img.src.includes('images'))) {
@@ -141,51 +131,64 @@
                 break;
             }
         }
-        if (!guideImgUrl && imgs.length > 0) {
-            for (const img of imgs) {
-                if (img.width > 220 || img.height > 80) {
-                    guideImgUrl = img.src;
-                    break;
-                }
+
+        // Tự động tìm tên miền nhiệm vụ trong "Bước 1"
+        const fullText = document.body ? document.body.innerText : "";
+        
+        // Tìm ô hiển thị domain ở Bước 1
+        const allBoxes = document.querySelectorAll('div, p, b, strong, span, button');
+        for (const box of allBoxes) {
+            const txt = (box.innerText || "").trim();
+            // Match dạng domain (ví dụ: idelec.com.co, fagom.co.in, v.v.)
+            if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/.test(txt) && !txt.includes('layma.net') && !txt.includes('google.com')) {
+                autoDetectedQuestUrl = "https://" + txt + "/";
+                break;
             }
         }
 
-        // Quét từ khóa
-        const allElements = document.querySelectorAll('div, p, b, strong, span');
-        for (const el of allElements) {
-            const txt = el.innerText || "";
+        // Tìm từ khóa nếu là nhiệm vụ Google
+        for (const el of allBoxes) {
+            const txt = (el.innerText || "").trim();
             if (txt.includes('sunwin') || txt.includes('88bet') || txt.includes('w88') || txt.includes('bk8')) {
-                const words = txt.trim().split(/\s+/);
-                if (words.length <= 3) {
-                    searchKeyword = txt.trim();
+                if (txt.split(/\s+/).length <= 3) {
+                    searchKeyword = txt;
                     break;
                 }
             }
         }
 
-        // 2. CSS Giao diện chuẩn xác theo Hình 3
+        // 2. CSS Giao diện chuẩn xác theo Hình 3 (Đè chính giữa màn hình)
         GM_addStyle(`
-            #duyzoz-layma-panel {
+            #duyzoz-backdrop {
                 position: fixed;
-                top: 15px;
-                right: 25px;
-                width: 480px;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(15, 23, 42, 0.7);
+                backdrop-filter: blur(8px);
+                z-index: 2147483646;
+                display: flex; align-items: center; justify-content: center;
+            }
+
+            #duyzoz-layma-panel {
+                position: relative;
+                width: 500px;
                 max-width: 95vw;
+                max-height: 94vh;
+                overflow-y: auto;
                 background: #ffffff;
-                border: 1px solid #fde68a;
-                border-radius: 16px;
-                box-shadow: 0 20px 45px rgba(0,0,0,0.18), 0 0 0 1px rgba(245, 158, 11, 0.25);
+                border: 2px solid #fde68a;
+                border-radius: 18px;
+                box-shadow: 0 25px 60px rgba(0,0,0,0.35);
                 z-index: 2147483647;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 color: #334155;
                 padding: 16px;
                 box-sizing: border-box;
-                animation: panelFadeIn 0.3s ease-out;
+                animation: panelPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             }
 
-            @keyframes panelFadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
+            @keyframes panelPop {
+                from { opacity: 0; transform: scale(0.95); }
+                to { opacity: 1; transform: scale(1); }
             }
 
             /* CARD 1: HEADER */
@@ -199,11 +202,11 @@
                 position: relative;
             }
             .dz-brand-title {
-                font-size: 22px;
+                font-size: 24px;
                 font-weight: 800;
                 color: #d946ef;
                 letter-spacing: -0.01em;
-                margin-bottom: 3px;
+                margin-bottom: 2px;
             }
             .dz-brand-link {
                 color: #3b82f6;
@@ -374,7 +377,10 @@
             }
         `);
 
-        // 3. Render HTML
+        // 3. Render HTML - Bọc trong Backdrop chính giữa màn hình
+        const backdrop = document.createElement('div');
+        backdrop.id = 'duyzoz-backdrop';
+
         const panel = document.createElement('div');
         panel.id = 'duyzoz-layma-panel';
         panel.innerHTML = `
@@ -391,7 +397,7 @@
                 <div class="dz-settings-title">Cài đặt Bypass</div>
                 <div class="dz-setting-row">
                     <span>Đổi NV khi lỗi:</span>
-                    <label class="dz-toggle"><input type="checkbox"><span class="dz-slider"></span></label>
+                    <label class="dz-toggle"><input type="checkbox" id="dz-opt-auto-change-err" checked><span class="dz-slider"></span></label>
                 </div>
                 <div class="dz-setting-row">
                     <span>Đổi NV blacklist:</span>
@@ -399,7 +405,7 @@
                 </div>
                 <div class="dz-setting-row">
                     <span>Mở link tự động:</span>
-                    <label class="dz-toggle"><input type="checkbox"><span class="dz-slider"></span></label>
+                    <label class="dz-toggle"><input type="checkbox" checked><span class="dz-slider"></span></label>
                 </div>
                 <div class="dz-setting-row">
                     <span>Lưu link đã nhập:</span>
@@ -413,15 +419,16 @@
                         <div style="font-weight: 700;">Thời gian chờ (giây):</div>
                         <div style="font-size: 11px; font-style: italic;">(Khuyến dùng >70s để tránh bị cấm)</div>
                     </div>
-                    <input type="number" id="dz-wait-seconds" class="dz-time-input" value="85">
+                    <input type="number" id="dz-wait-seconds" class="dz-time-input" value="65">
                 </div>
             </div>
 
             <!-- NHIỆM VỤ -->
             <div class="dz-quest-card">
                 <div class="dz-alert-box" id="dz-status-alert">
-                    <strong>Không lấy được link Quest tự động!</strong><br>
-                    Bạn có thể nhập thông tin nhiệm vụ thủ công để tiếp tục.
+                    ${autoDetectedQuestUrl 
+                        ? `<strong>✅ ĐÃ TỰ ĐỘNG TÌM THẤY LINK QUEST!</strong><br>Đang chuẩn bị kết nối ngầm...` 
+                        : `<strong>Không lấy được link Quest tự động!</strong><br>Bạn có thể nhập thông tin nhiệm vụ thủ công để tiếp tục.`}
                 </div>
 
                 <label class="dz-field-label">Link ảnh hướng dẫn</label>
@@ -433,24 +440,40 @@
                 <input type="text" class="dz-field-input" id="dz-keyword-input" value="${searchKeyword}" readonly>
 
                 <label class="dz-field-label">Link Quest thủ công</label>
-                <input type="text" class="dz-field-input" id="dz-manual-url" placeholder="https://..." style="border: 2px solid #f59e0b;">
+                <input type="text" class="dz-field-input" id="dz-manual-url" value="${autoDetectedQuestUrl}" placeholder="https://..." style="border: 2px solid #f59e0b;">
 
                 <button class="dz-btn-continue" id="dz-btn-submit-quest">Tiếp tục với link này</button>
                 <button class="dz-btn-change" id="dz-btn-reload-quest">Đổi nhiệm vụ</button>
             </div>
         `;
 
-        document.body ? document.body.appendChild(panel) : document.documentElement.appendChild(panel);
+        backdrop.appendChild(panel);
+        (document.body || document.documentElement).appendChild(backdrop);
 
-        document.getElementById('dz-close-btn').onclick = () => panel.remove();
-        document.getElementById('dz-btn-reload-quest').onclick = () => window.location.reload();
+        document.getElementById('dz-close-btn').onclick = () => backdrop.remove();
 
-        // 4. BẤM TIẾP TỤC VỚI LINK NÀY
+        // NÚT ĐỔI NHIỆM VỤ THẬT (Kích hoạt nút Đổi nhiệm vụ của chính web LayMa)
+        function triggerNativeChangeTask() {
+            const nativeChangeBtns = document.querySelectorAll('button, a, input[type="button"]');
+            for (const btn of nativeChangeBtns) {
+                if ((btn.innerText || btn.value || "").includes('Đổi nhiệm vụ') && !btn.id.includes('dz-')) {
+                    console.log("[Duyzoz Engine] Đang bấm nút Đổi nhiệm vụ gốc của web...");
+                    btn.click();
+                    return true;
+                }
+            }
+            window.location.reload();
+            return false;
+        }
+
+        document.getElementById('dz-btn-reload-quest').onclick = triggerNativeChangeTask;
+
+        // XỬ LÝ QUY TRÌNH BYPASS HOÀN CHỈNH
         const submitBtn = document.getElementById('dz-btn-submit-quest');
         const manualInput = document.getElementById('dz-manual-url');
         const alertBox = document.getElementById('dz-status-alert');
 
-        submitBtn.onclick = () => {
+        function startBypassProcess() {
             const questUrl = manualInput.value.trim();
             if (!questUrl.startsWith('http')) {
                 alert("Vui lòng nhập đường link đầy đủ bắt đầu bằng https://");
@@ -458,123 +481,243 @@
                 return;
             }
 
-            const waitTime = parseInt(document.getElementById('dz-wait-seconds').value) || 85;
+            const waitTime = parseInt(document.getElementById('dz-wait-seconds').value) || 65;
             submitBtn.disabled = true;
-            alertBox.innerHTML = `<strong>⚡ Đang kết nối ngầm tới:</strong> ${questUrl}<br>Đang bóc tách mã chiến dịch LayMa...`;
+            alertBox.innerHTML = `<strong>⚡ Đang kết nối ngầm tới:</strong> ${questUrl}<br>Đang tải HTML để bóc tách token chiến dịch...`;
 
-            // Gửi ngầm request tới web nhiệm vụ
+            // BƯỚC 1: Tải HTML của trang nhiệm vụ để bóc tách keytoken
             GM_xmlhttpRequest({
                 method: "GET",
                 url: questUrl,
                 headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
                 onload: (res) => {
-                    const html = res.responseText;
-                    let token = "e9VJokISt";
+                    const html = res.responseText || "";
+                    let token = null;
 
-                    const tokenMatch = html.match(/api\.layma\.net[^\'\"]*keytoken=([a-zA-Z0-9]+)/i) || 
-                                       html.match(/Traffic\/Index\/([a-zA-Z0-9]+)/i) ||
-                                       html.match(/['"]([a-zA-Z0-9]{8,12})['"][^>]*layma/i);
+                    // Bóc tách token từ layma script
+                    const match = html.match(/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) || 
+                                  html.match(/keytoken=([a-zA-Z0-9_-]+)/i) ||
+                                  html.match(/['"]([a-zA-Z0-9_-]{8,15})['"][^>]*layma/i);
 
-                    if (tokenMatch) token = tokenMatch[1];
+                    if (match) {
+                        token = match[1];
+                    }
 
-                    console.log("[Duyzoz Engine] Đã có keytoken:", token);
-                    alertBox.innerHTML = `<strong>✅ Đã kết nối phiên thành công!</strong><br>Đang giữ phiên an toàn trong ${waitTime} giây...`;
-
-                    // Bắt đầu đếm ngược thời gian
-                    let remaining = waitTime;
-                    const timerId = setInterval(() => {
-                        remaining--;
-                        submitBtn.innerText = `Đang đếm ngược: ${remaining}s`;
-
-                        if (remaining <= 0) {
-                            clearInterval(timerId);
-                            submitBtn.innerText = "Đang xin mã từ máy chủ LayMa...";
-
-                            // Hết giờ -> Gọi API xin mã
-                            GM_xmlhttpRequest({
-                                method: "GET",
-                                url: `https://api.layma.net/api/admin/campain?keytoken=${token}&flatform=google`,
-                                headers: { 'Host': 'api.layma.net' },
-                                onload: (cRes) => {
-                                    let campId = 102026;
-                                    try {
-                                        const cData = JSON.parse(cRes.responseText);
-                                        campId = cData.id || 102026;
-                                    } catch(e) {}
-
-                                    GM_xmlhttpRequest({
-                                        method: "POST",
-                                        url: "https://api.layma.net/api/admin/codemanager/getcode",
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'Origin': questUrl,
-                                            'Referer': questUrl
-                                        },
-                                        data: JSON.stringify({
-                                            uuid: String(Math.floor(100000 + Math.random() * 900000)),
-                                            browser: 'Chrome',
-                                            browserVersion: '120',
-                                            screen: '1920 x 1080',
-                                            trafficid: campId,
-                                            solution: '1'
-                                        }),
-                                        onload: (codeRes) => {
-                                            try {
-                                                const codeJson = JSON.parse(codeRes.responseText);
-                                                const rawHtml = codeJson.html || "";
-                                                const m = rawHtml.match(/\d{4,8}/);
-
-                                                if (m) {
-                                                    const finalCode = m[0];
-                                                    alertBox.innerHTML = `<strong style="color:#059669; font-size:14px;">🎉 LẤY MÃ THÀNH CÔNG: ${finalCode}</strong><br>Đang tự động điền vào LayMa...`;
-                                                    submitBtn.innerText = `Mã: ${finalCode}`;
-                                                    GM_setClipboard(finalCode);
-
-                                                    // Tự động điền vào ô mã trên LayMa
-                                                    const codeInp = document.querySelector('input[name="code"], input[id="code"], input[placeholder*="mã"], input[placeholder*="code"]');
-                                                    if (codeInp) {
-                                                        codeInp.value = finalCode;
-                                                        codeInp.dispatchEvent(new Event('input', { bubbles: true }));
-                                                        codeInp.dispatchEvent(new Event('change', { bubbles: true }));
-
-                                                        const subBtn = document.querySelector('button[type="submit"], #btn-submit, .btn-submit');
-                                                        if (subBtn) setTimeout(() => subBtn.click(), 800);
-                                                    }
-                                                } else {
-                                                    alertBox.innerHTML = `<span>Server trả về: ${rawHtml}</span>`;
-                                                }
-                                            } catch(e) {
-                                                alertBox.innerHTML = `<span>Lỗi xử lý mã: ${e.message}</span>`;
-                                            }
-                                        }
-                                    });
-                                }
-                            });
+                    if (!token) {
+                        // Nếu không thấy token và đang bật chế độ Đổi NV khi lỗi -> Tự động đổi nhiệm vụ!
+                        const autoChange = document.getElementById('dz-opt-auto-change-err').checked;
+                        if (autoChange) {
+                            alertBox.innerHTML = `<span style="color:#ef4444; font-weight:bold;">⚠️ Không tìm thấy mã trên web này! Đang tự động đổi sang nhiệm vụ khác...</span>`;
+                            setTimeout(triggerNativeChangeTask, 1500);
+                            return;
                         }
-                    }, 1000);
+                        token = "qjN7uwFQr"; // fallback
+                    }
+
+                    console.log("[Duyzoz Engine] Tìm thấy keyToken:", token);
+                    alertBox.innerHTML = `<strong>✅ Đã tìm thấy Token (${token})!</strong><br>Đang tạo session ngầm từ api.layma.net...`;
+
+                    // BƯỚC 2: Gọi api/traffic/session để lấy Session Token
+                    GM_xmlhttpRequest({
+                        method: "POST",
+                        url: "https://api.layma.net/api/traffic/session",
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0'
+                        },
+                        data: JSON.stringify({ keyToken: token }),
+                        onload: (sRes) => {
+                            let sessionToken = null;
+                            try {
+                                const sJson = JSON.parse(sRes.responseText);
+                                sessionToken = sJson.sessionToken || sJson.SessionToken;
+                            } catch(e) {}
+
+                            if (!sessionToken) {
+                                alertBox.innerHTML = `<span style="color:#ef4444;">Lỗi tạo session! Đang đổi nhiệm vụ...</span>`;
+                                setTimeout(triggerNativeChangeTask, 1500);
+                                return;
+                            }
+
+                            // BƯỚC 3: Thử các platform ('tructiep', 'google') để kích hoạt chiến dịch
+                            tryActivateCampaign(token, sessionToken, questUrl, waitTime);
+                        },
+                        onerror: () => {
+                            alertBox.innerHTML = `<span style="color:red;">Lỗi kết nối tới api.layma.net!</span>`;
+                            submitBtn.disabled = false;
+                        }
+                    });
                 },
                 onerror: () => {
-                    alertBox.innerHTML = `<span style="color:red;">Lỗi kết nối tới web nhiệm vụ!</span>`;
-                    submitBtn.disabled = false;
-                    submitBtn.innerText = "Tiếp tục với link này";
+                    alertBox.innerHTML = `<span style="color:red;">Không thể kết nối tới web nhiệm vụ! Đang đổi nhiệm vụ...</span>`;
+                    setTimeout(triggerNativeChangeTask, 1500);
                 }
             });
-        };
+        }
+
+        // BƯỚC 3: Kích hoạt campaign qua api/admin/campain
+        function tryActivateCampaign(token, sessionToken, questUrl, waitTime) {
+            const platforms = ['tructiep', 'google', 'facebook'];
+            let currentPlatIdx = 0;
+
+            function attemptPlatform() {
+                if (currentPlatIdx >= platforms.length) {
+                    alertBox.innerHTML = `<span style="color:red;">Hết chiến dịch phù hợp cho web này! Đang đổi nhiệm vụ...</span>`;
+                    setTimeout(triggerNativeChangeTask, 1500);
+                    return;
+                }
+
+                const plat = platforms[currentPlatIdx];
+                const campUrl = `https://api.layma.net/api/admin/campain?keytoken=${token}&flatform=${plat}&waitMode=1&requiredPageVisits=1`;
+
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: campUrl,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0',
+                        'X-Traffic-Session': sessionToken,
+                        'Origin': questUrl,
+                        'Referer': questUrl
+                    },
+                    onload: (cRes) => {
+                        if (cRes.status === 200) {
+                            try {
+                                const cData = JSON.parse(cRes.responseText);
+                                console.log("[Duyzoz Engine] Kích hoạt chiến dịch thành công:", cData);
+                                
+                                const trafficId = cData.id;
+                                const actualWait = cData.requiredWaitSeconds || waitTime;
+
+                                alertBox.innerHTML = `<strong>🎉 Kết nối chiến dịch thành công!</strong><br>Đang giữ phiên an toàn trong ${actualWait} giây...`;
+
+                                // BẮT ĐẦU ĐẾM NGƯỢC
+                                runCountdown(actualWait, () => {
+                                    fetchFinalCode(token, sessionToken, trafficId, questUrl);
+                                });
+                            } catch(e) {
+                                currentPlatIdx++;
+                                attemptPlatform();
+                            }
+                        } else {
+                            currentPlatIdx++;
+                            attemptPlatform();
+                        }
+                    },
+                    onerror: () => {
+                        currentPlatIdx++;
+                        attemptPlatform();
+                    }
+                });
+            }
+
+            attemptPlatform();
+        }
+
+        // BƯỚC 4: Đếm ngược
+        function runCountdown(seconds, onFinished) {
+            let left = seconds;
+            const timer = setInterval(() => {
+                left--;
+                submitBtn.innerText = `Đang đếm ngược: ${left}s`;
+                if (left <= 0) {
+                    clearInterval(timer);
+                    submitBtn.innerText = "Đang xin mã từ máy chủ...";
+                    onFinished();
+                }
+            }, 1000);
+        }
+
+        // BƯỚC 5: Gọi api/traffic/getcode để lấy mã thực sự
+        function fetchFinalCode(token, sessionToken, trafficId, questUrl) {
+            alertBox.innerHTML = `<strong>Đang yêu cầu mã giải phóng từ api.layma.net/api/traffic/getcode...</strong>`;
+
+            GM_xmlhttpRequest({
+                method: "POST",
+                url: "https://api.layma.net/api/traffic/getcode",
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Traffic-Session': sessionToken,
+                    'Origin': questUrl,
+                    'Referer': questUrl
+                },
+                data: JSON.stringify({
+                    uuid: String(Math.floor(100000 + Math.random() * 900000)),
+                    browser: 'Chrome',
+                    browserVersion: '120',
+                    browserMajorVersion: 120,
+                    cookies: true,
+                    mobile: false,
+                    os: 'Windows',
+                    osVersion: '10',
+                    screen: '1920 x 1080',
+                    referrer: questUrl,
+                    trafficId: trafficId,
+                    trafficSessionToken: sessionToken,
+                    solution: 1
+                }),
+                onload: (res) => {
+                    try {
+                        const json = JSON.parse(res.responseText);
+                        const rawCode = json.html || json.code || "";
+                        const match = rawCode.match(/\d{4,8}/);
+
+                        if (match) {
+                            const finalCode = match[0];
+                            alertBox.innerHTML = `<strong style="color:#059669; font-size:15px;">🎉 LẤY MÃ THÀNH CÔNG: ${finalCode}</strong><br>Đã tự động điền vào ô mã!`;
+                            submitBtn.innerText = `Mã: ${finalCode}`;
+                            GM_setClipboard(finalCode);
+
+                            // Điền vào ô input trên trang LayMa
+                            const codeInputs = document.querySelectorAll('input[type="text"], input[name="code"], input[id="code"]');
+                            for (const inp of codeInputs) {
+                                if (!inp.id.includes('dz-')) {
+                                    inp.value = finalCode;
+                                    inp.dispatchEvent(new Event('input', { bubbles: true }));
+                                    inp.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            }
+
+                            // Tự động bấm nút Xác nhận nếu không vướng Turnstile
+                            const submitBtnOnPage = document.querySelector('button.btn-primary, #btn-submit, button[type="submit"]');
+                            if (submitBtnOnPage && !submitBtnOnPage.id.includes('dz-')) {
+                                setTimeout(() => submitBtnOnPage.click(), 1000);
+                            }
+                        } else {
+                            alertBox.innerHTML = `<span>Server trả về: ${res.responseText}</span>`;
+                        }
+                    } catch(e) {
+                        alertBox.innerHTML = `<span style="color:red;">Lỗi phân tích mã: ${e.message}</span>`;
+                    }
+                },
+                onerror: () => {
+                    alertBox.innerHTML = `<span style="color:red;">Lỗi kết nối khi lấy mã!</span>`;
+                }
+            });
+        }
+
+        submitBtn.onclick = startBypassProcess;
+
+        // NẾU TỰ ĐỘNG TÌM THẤY LINK QUEST VÀ ĐANG BẬT TỰ ĐỘNG -> TỰ ĐỘNG CHẠY LUÔN SAU 1 GIÂY!
+        if (autoDetectedQuestUrl) {
+            setTimeout(() => {
+                console.log("[Duyzoz Engine] Tự động khởi chạy bypass cho link phát hiện được:", autoDetectedQuestUrl);
+                startBypassProcess();
+            }, 1000);
+        }
     }
 
-    // Tự động kích hoạt ngay khi tải trang (không chờ load event)
-    function run() {
+    // Khởi chạy khi DOM sẵn sàng
+    function startEngine() {
         scanHtmlScripts();
         initLayMaPanel();
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', run);
+        document.addEventListener('DOMContentLoaded', startEngine);
     } else {
-        run();
+        startEngine();
     }
 
-    // Quét bổ sung định kỳ cho trang SPA/load chậm
-    setInterval(run, 1500);
+    setInterval(scanHtmlScripts, 2000);
 
 })();

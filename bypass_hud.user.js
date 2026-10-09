@@ -932,12 +932,17 @@
                                 if (cj.requiredWaitSeconds) serverWait = Math.max(serverWait, cj.requiredWaitSeconds);
                             } catch (e) {}
 
+                            if (!trafficId) {
+                                console.warn("[Duyzoz Engine] Campaign ID null/invalid, triggering fail-fast!");
+                                showFailAndRetry("❌ Khởi tạo chiến dịch thất bại trên máy chủ LayMa. Vui lòng đổi nhiệm vụ!");
+                                return;
+                            }
+
                             // BẮT ĐẦU ĐẾM NGƯỢC THẬT SỰ
                             runCountdown(serverWait, keyToken, sessionToken, trafficId, questUrl);
                         },
                         onerror: () => {
-                            // Vẫn tiếp tục đếm ngược với session đã có
-                            runCountdown(85, keyToken, sessionToken, "", questUrl);
+                            showFailAndRetry("❌ Khởi tạo chiến dịch thất bại trên máy chủ LayMa. Vui lòng đổi nhiệm vụ!");
                         }
                     });
                 },
@@ -1349,11 +1354,14 @@
                     const m = raw.match(/[a-zA-Z0-9]{4,10}/);
                     if (m) codeReceived = m[0];
                 } catch(e) {}
-                if (!codeReceived) codeReceived = "BypUu1";
-                onSuccess(codeReceived);
+                if (!codeReceived) {
+                    showFailAndRetry("❌ Không thể lấy mã từ máy chủ LayMa. Vui lòng thử lại hoặc đổi nhiệm vụ!");
+                } else {
+                    onSuccess(codeReceived);
+                }
             },
             onerror: () => {
-                onSuccess("BypUu1");
+                showFailAndRetry("❌ Kết nối máy chủ lấy mã thất bại. Vui lòng thử lại!");
             }
         });
     }

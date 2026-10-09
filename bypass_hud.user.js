@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.9.3
+// @version      4.0.0
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1272,20 +1272,22 @@
                 'Accept': 'application/json, text/plain, */*'
             },
             data: JSON.stringify({
-                uuid: String(Math.floor(100000 + Math.random() * 900000)),
-                browser: 'Chrome',
-                browserVersion: '120',
-                browserMajorVersion: 120,
-                cookies: true,
-                mobile: false,
-                os: 'Windows',
-                osVersion: '10',
-                screen: '1920 x 1080',
-                referrer: questUrl,
-                trafficId: trafficId,
-                trafficSessionToken: sessionToken,
-                solution: 1,
-                qCaptchaToken: qCaptchaToken
+                request: {
+                    uuid: String(Math.floor(100000 + Math.random() * 900000)),
+                    browser: 'Chrome',
+                    browserVersion: '120',
+                    browserMajorVersion: 120,
+                    cookies: true,
+                    mobile: false,
+                    os: 'Windows',
+                    osVersion: '10',
+                    screen: '1920 x 1080',
+                    referrer: questUrl,
+                    trafficId: trafficId,
+                    trafficSessionToken: sessionToken,
+                    solution: "1",
+                    qCaptchaToken: qCaptchaToken
+                }
             }),
             onload: (res) => {
                 console.log("[Duyzoz] getcode status:", res.status);
@@ -1317,7 +1319,7 @@
                 }
 
                 if (codeReceived) {
-                    // handleReceivedCode(codeReceived);
+                    handleReceivedCode(codeReceived);
                 }
             },
             onerror: () => {

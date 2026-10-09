@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.7.0
+// @version      3.8.0
 // @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Lắng nghe xác thực QCaptcha đa tầng, tự động lấy mã, auto submit LayMa & chuyển hướng link đích) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -952,63 +952,46 @@
             });
         }
 
-        // Gửi GET lấy traffic key từ trang đích
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: questUrl,
-            headers: {
-                'User-Agent': navigator.userAgent,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            },
-            onload: (res) => {
-                const html = res.responseText || "";
-                let keyToken = "";
-                const m = html.match(/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) || 
-                          html.match(/keytoken=([a-zA-Z0-9_-]+)/i) ||
-                          html.match(/layma\.net\/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) ||
-                          html.match(/['"]([a-zA-Z0-9_-]{8,15})['"][^>]*layma/i);
-
-                if (m) keyToken = m[1];
-                if (!keyToken) {
-                    console.warn("[Duyzoz Engine] Không tìm thấy key token trên trang web đích, sử dụng key token dự phòng.");
-                    keyToken = "qjN7uwFQr";
-                }
-
-                // Gửi GET tới Traffic/Index để kích hoạt tracking nếu có
-                if (keyToken) {
-                    GM_xmlhttpRequest({
-                        method: "GET",
-                        url: "https://layma.net/Traffic/Index/" + keyToken,
-                        onload: () => {}
-                    });
-                }
-
-                connectCampaignWithToken(keyToken);
-            },
-            onerror: () => {
-                // Nếu HTTPS lỗi (ví dụ domain đích không có SSL), thử HTTP
-                console.warn("[Duyzoz Engine] Thử truy cập trang web đích qua HTTP...");
-                const fallbackHttp = questUrl.replace(/^https:\/\//i, 'http://');
-                GM_xmlhttpRequest({
-                    method: "GET",
-                    url: fallbackHttp,
-                    onload: (res) => {
-                        const html = res.responseText || "";
-                        let keyToken = "";
-                        const m = html.match(/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) || 
-                                  html.match(/keytoken=([a-zA-Z0-9_-]+)/i);
-                        if (m) keyToken = m[1];
-                        if (!keyToken) keyToken = "qjN7uwFQr";
-                        connectCampaignWithToken(keyToken);
-                    },
-                    onerror: () => {
-                        // Tự động dùng fallback token để luôn đếm ngược thành công cho mọi web!
-                        console.warn("[Duyzoz Engine] Trang web đích không phản hồi, tự động dùng token dự phòng và tiếp tục!");
-                        connectCampaignWithToken("qjN7uwFQr");
-                    }
-                });
+        // Trích xuất KeyToken: Ưu tiên thẻ #tokenId trên DOM của LayMa trước
+        let keyToken = document.getElementById('tokenId')?.innerText?.trim() || "";
+        if (!keyToken) {
+            const path = window.location.pathname.replace(/^\//, '').trim();
+            if (path && path.length >= 5 && !path.includes('/')) {
+                keyToken = path;
             }
-        });
+        }
+
+        if (keyToken) {
+            console.log("[Duyzoz Engine] Tìm thấy KeyToken trực tiếp từ LayMa DOM/Path:", keyToken);
+            connectCampaignWithToken(keyToken);
+        } else {
+            // Gửi GET lấy traffic key từ trang đích nếu chưa có trong DOM
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: questUrl,
+                headers: {
+                    'User-Agent': navigator.userAgent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                },
+                onload: (res) => {
+                    const html = res.responseText || "";
+                    const m = html.match(/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) || 
+                              html.match(/keytoken=([a-zA-Z0-9_-]+)/i) ||
+                              html.match(/layma\.net\/Traffic\/Index\/([a-zA-Z0-9_-]+)/i);
+
+                    if (m) keyToken = m[1];
+                    if (!keyToken) {
+                        console.warn("[Duyzoz Engine] Không tìm thấy key token trên trang web đích.");
+                        showFailAndRetry("❌ Nhiệm vụ trên LayMa đã hết hạn hoặc không khả dụng. Vui lòng bấm Đổi nhiệm vụ!");
+                        return;
+                    }
+                    connectCampaignWithToken(keyToken);
+                },
+                onerror: () => {
+                    showFailAndRetry("❌ Không thể tải trang web đích. Vui lòng kiểm tra mạng hoặc Đổi nhiệm vụ!");
+                }
+            });
+        }
     }
 
     function showFailAndRetry(msg) {

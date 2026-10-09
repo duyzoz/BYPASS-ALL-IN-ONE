@@ -513,107 +513,156 @@ class BypassTool:
         """Bypass LayMa.net"""
         print("\n=== LAYMANET BYPASS ===")
         
-        url_configs = {
-            'https://bamivapharma.com/': {'code': 'e9VJokISt'},
-            'https://suamatzenmilk.com/': {'code': 'viyjUHvaj'},
-            'https://china-airline.net/': {'code': 'oTedsZr2m', 'hurl': 'https://enzymevietnam.com/'},
-            'https://scarmagic-gm.com/': {'code': 'e9VJokISt', 'hurl': 'https://bamivapharma.com/'}
-        }
-        
-        eurl = input('Nhập url nhiệm vụ: ').strip()
-        platform = input('Nhập platform (facebook/google): ').strip().lower()
-        
-        # Normalize platform
-        if platform in ['facebook', 'fb', 'meta']:
-            platform = 'facebook'
-        elif platform in ['google', 'gg', 'g']:
-            platform = 'google'
-        else:
-            print('Platform không hỗ trợ')
-            return
-        
-        # Find config
-        config = None
-        for test_url in url_configs:
-            if eurl in [test_url, test_url.replace('https://', ''), test_url.replace('https://', 'http://'), test_url.replace('/', '')]:
-                config = url_configs[test_url]
-                hurl = config.get('hurl', test_url)
-                break
-        
-        if not config:
-            print('URL không được hỗ trợ')
-            return
+        url_input = input('Nhập url nhiệm vụ / domain đích (vd: https://idelec.com.co/): ').strip()
+        if not url_input.startswith('http://') and not url_input.startswith('https://'):
+            url_input = 'https://' + url_input
 
+        keytoken = input('Nhập KeyToken (để trống để tự động quét từ URL): ').strip()
+        
         headers = {
-            'Host': 'layma.net',
-            'Accept-Language': 'en-GB,en;q=0.9',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-            'Referer': hurl,
-            'Connection': 'keep-alive',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         }
 
-        response = requests.get(f'https://layma.net/Traffic/Index/{config["code"]}', headers=headers)
-        if response.status_code != 200:
-            print('Lỗi khi lấy data, vui lòng báo cáo admin')
+        if not keytoken:
+            print(f"[*] Đang tải trang {url_input} để trích xuất KeyToken...")
+            try:
+                resp = requests.get(url_input, headers=headers, timeout=15)
+                html_text = resp.text
+                m = re.search(r'Traffic/Index/([a-zA-Z0-9_-]+)', html_text) or \
+                    re.search(r'keytoken=([a-zA-Z0-9_-]+)', html_text) or \
+                    re.search(r'layma\.net/Traffic/Index/([a-zA-Z0-9_-]+)', html_text)
+                if m:
+                    keytoken = m.group(1)
+                    print(f"[+] Tìm thấy KeyToken: {keytoken}")
+                else:
+                    print("[-] Không tự động tìm thấy KeyToken trên trang!")
+                    keytoken = input('Vui lòng nhập KeyToken thủ công: ').strip()
+            except Exception as e:
+                print(f"[-] Lỗi khi tải URL: {e}")
+                keytoken = input('Vui lòng nhập KeyToken thủ công: ').strip()
+
+        if not keytoken:
+            print("[-] Không có KeyToken, hủy bỏ.")
             return
 
-        sheaders = {
-            'Host': 'api.layma.net',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-            'Accept': '*/*',
-            'Origin': hurl,
-            'Sec-Fetch-Site': 'cross-site',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Dest': 'empty',
-            'Referer': hurl,
-            'Priority': 'u=1, i',
-        }
-        
-        sparams = {
-            'keytoken': config['code'],
-            'flatform': platform,
-        }
-        
-        sresponse = requests.get('https://api.layma.net/api/admin/campain', params=sparams, headers=sheaders)
-        if sresponse.status_code != 200:
-            print('Lỗi khi lấy data, vui lòng báo cáo admin')
+        platform_input = input('Nhập platform (1: google, 2: tructiep [default: 2]): ').strip()
+        platform = "google" if platform_input == '1' else "tructiep"
+
+        # Step 1: Initialize Traffic Session
+        print(f"[*] Khởi tạo Session với KeyToken: {keytoken}")
+        session_url = "https://api.layma.net/api/traffic/session"
+        try:
+            s_resp = requests.post(session_url, json={"keyToken": keytoken}, headers=headers, timeout=15)
+            session_data = s_resp.json()
+            session_token = session_data.get("sessionToken") or session_data.get("SessionToken")
+        except Exception as e:
+            print(f"[-] Lỗi khi tạo Traffic Session: {e}")
+            session_token = None
+
+        if not session_token:
+            print("[-] Không lấy được sessionToken từ API Layma!")
             return
-            
-        html = sresponse.json()
         
-        theaders = {
-            'Host': 'api.layma.net',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-            'Accept': '*/*',
-            'Origin': hurl,
-            'Sec-Fetch-Site': 'cross-site',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Dest': 'empty',
-            'Referer': hurl,
-            'Priority': 'u=1, i',
+        print(f"[+] Session Token: {session_token[:20]}...")
+
+        # Step 2: Fetch Campaign Info
+        print("[*] Đang lấy thông tin chiến dịch (Campaign)...")
+        camp_url = f"https://api.layma.net/api/admin/campain?keytoken={keytoken}&flatform={platform}&waitMode=1&requiredPageVisits=1"
+        api_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'X-Traffic-Session': session_token,
+            'Origin': url_input,
+            'Referer': url_input,
+            'Accept': 'application/json',
         }
 
-        tjson_data = {
-            'uuid': self.rad,
+        wait_seconds = 85
+        traffic_id = ""
+        try:
+            c_resp = requests.get(camp_url, headers=api_headers, timeout=15)
+            c_data = c_resp.json()
+            traffic_id = c_data.get("id", "")
+            req_wait = c_data.get("requiredWaitSeconds", 85)
+            if req_wait and req_wait > 0:
+                wait_seconds = req_wait
+            print(f"[+] Traffic ID: {traffic_id} | Thời gian chờ yêu cầu: {wait_seconds}s")
+        except Exception as e:
+            print(f"[!] Warning khi lấy Campaign Info: {e}. Sử dụng thời gian đếm ngược mặc định: {wait_seconds}s")
+
+        # Step 3: Countdown Wait
+        print(f"[*] Đang đếm ngược {wait_seconds} giây theo yêu cầu của hệ thống LayMa...")
+        for remaining in range(wait_seconds, 0, -1):
+            print(f"\r[->] Đợi còn lại: {remaining}s...", end='', flush=True)
+            time.sleep(1)
+        print("\n[+] Hoàn tất thời gian đếm ngược!")
+
+        # Step 4: Get Code
+        print("[*] Đang gửi yêu cầu nhận mã tới /api/traffic/getcode...")
+        getcode_url = "https://api.layma.net/api/traffic/getcode"
+        payload = {
+            'uuid': str(random.randint(100000, 999999)),
             'browser': 'Chrome',
-            'browserVersion': '100',
-            'browserMajorVersion': 100,
+            'browserVersion': '120',
+            'browserMajorVersion': 120,
             'cookies': True,
             'mobile': False,
-            'os': 'OS',
-            'osVersion': '5',
-            'screen': '1000 x 1000',
-            'referrer': hurl,
-            'trafficid': html['id'],
-            'solution': '1',
+            'os': 'Windows',
+            'osVersion': '10',
+            'screen': '1920 x 1080',
+            'referrer': url_input,
+            'trafficId': traffic_id,
+            'trafficSessionToken': session_token,
+            'solution': 1
         }
 
-        tresponse = requests.post('https://api.layma.net/api/admin/codemanager/getcode', headers=theaders, json=tjson_data)
-        if tresponse.status_code == 200:
-            th = tresponse.json()
-            print(f'Mã: {th["html"]}')
-        else:
-            print('Lỗi khi lấy data, vui lòng báo cáo admin')
+        try:
+            gc_resp = requests.post(getcode_url, json=payload, headers=api_headers, timeout=20)
+            print(f"[*] Response Status: {gc_resp.status_code}")
+            try:
+                res_json = gc_resp.json()
+                raw_code = res_json.get("html") or res_json.get("code") or res_json.get("data") or ""
+                m = re.search(r'[a-zA-Z0-9]{4,10}', str(raw_code))
+                final_code = m.group(0) if m else raw_code.strip()
+                if final_code:
+                    print(f"\n========================================")
+                    print(f"   🎉 BÍ MẬT LAYMA BYPASS THÀNH CÔNG!")
+                    print(f"   MÃ NHẬN ĐƯỢC:  {final_code}")
+                    print(f"========================================\n")
+                    return
+                else:
+                    print(f"[-] Response không chứa mã: {res_json}")
+            except Exception:
+                print(f"[-] Raw Response: {gc_resp.text}")
+        except Exception as e:
+            print(f"[-] Lỗi khi gửi request getcode: {e}")
+
+        # Fallback Get Code
+        print("[!] Thử endpoint fallback admin/codemanager/getcode...")
+        fallback_url = "https://api.layma.net/api/admin/codemanager/getcode"
+        fallback_payload = {
+            'uuid': str(random.randint(100000, 999999)),
+            'browser': 'Chrome',
+            'browserVersion': '120',
+            'browserMajorVersion': 120,
+            'cookies': True,
+            'mobile': False,
+            'os': 'Windows',
+            'osVersion': '10',
+            'screen': '1920 x 1080',
+            'referrer': url_input,
+            'trafficid': traffic_id,
+            'solution': '1'
+        }
+        try:
+            fb_resp = requests.post(fallback_url, json=fallback_payload, headers=api_headers, timeout=20)
+            fb_json = fb_resp.json()
+            raw_code = fb_json.get("html") or fb_json.get("code") or ""
+            m = re.search(r'[a-zA-Z0-9]{4,10}', str(raw_code))
+            final_code = m.group(0) if m else raw_code.strip()
+            print(f"\n[+] MÃ FALLBACK: {final_code}\n")
+        except Exception as e:
+            print(f"[-] Lỗi fallback: {e}")
 
     def run(self):
         """Main function to run the tool"""

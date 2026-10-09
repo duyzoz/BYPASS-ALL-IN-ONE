@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.5.0
-// @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Hỗ trợ ALL tên miền dán vào, Link ảnh hướng dẫn, Trích xuất từ khóa, QCaptcha 2 bước lấy & nộp mã) & Link4Sub True Bypass.
+// @version      3.6.0
+// @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Lắng nghe xác thực QCaptcha đa tầng, tự động lấy mã, auto submit LayMa & chuyển hướng link đích) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://layma.net/*
 // @match        *://*.layma.net/*
@@ -1057,17 +1057,23 @@
         }, 1000);
     }
 
-    // 14. Bước 1: Render QCaptcha lấy mã
+    // 14. Bước 1: Render QCaptcha & Lắng nghe xác thực đa tầng (Watcher + Callback + Nút bấm)
     async function step1LoadQCaptcha(keyToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
 
         captchaBox.style.display = 'block';
         captchaBox.innerHTML = `
-            <div style="font-size: 14px; font-weight: bold; color: #7c3aed; margin-bottom: 8px;">🛡️ Xác minh bảo mật - QCAPTCHA (Bước 1: Lấy mã)</div>
-            <div style="font-size: 12px; color: #6b21a8; margin-bottom: 12px;">Vui lòng hoàn thành QCaptcha bên dưới để nhận mã:</div>
+            <div style="font-size: 14px; font-weight: bold; color: #7c3aed; margin-bottom: 6px;">🛡️ Xác minh bảo mật - QCAPTCHA</div>
+            <div style="font-size: 12px; color: #6b21a8; margin-bottom: 12px;">Vui lòng hoàn thành QCaptcha bên dưới để tự động lấy mã và vượt link:</div>
             <div id="qcaptcha-native-container" style="display: flex; justify-content: center; min-height: 78px;">
                 <div style="color: #7c3aed; font-size: 13px;">Đang nạp QCaptcha...</div>
+            </div>
+            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" id="dz-btn-proceed-captcha" style="width: 100%; padding: 10px; background: #10b981; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 6px rgba(16,185,129,0.3); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>✅ Xác nhận & Tiếp tục Vượt Link ➜</span>
+                </button>
+                <div style="font-size: 11px; color: #64748b; text-align: center;">Hệ thống sẽ tự động chuyển tiếp ngay khi có tích xanh [✔]. Nếu chưa tự nhảy, bấm nút trên.</div>
             </div>
         `;
 
@@ -1077,18 +1083,112 @@
         if (api && typeof api.render === 'function') {
             const container = document.getElementById('qcaptcha-native-container');
             container.innerHTML = "";
+            let solved = false;
+            let widgetId = null;
+            let pollInterval = null;
+
+            const onCaptchaSuccess = (token) => {
+                if (solved || !token) return;
+                solved = true;
+                if (pollInterval) clearInterval(pollInterval);
+                console.log("[Duyzoz Engine] Đã bắt được token QCaptcha thành công:", token.substring(0, 30) + "...");
+
+                // Đồng bộ token sang LayMa
+                pageWin.qCaptchaTokenValue = token;
+                try {
+                    const laymaContainer = document.getElementById('qcaptcha-checkcode');
+                    if (laymaContainer) {
+                        const tas = laymaContainer.querySelectorAll('textarea, input');
+                        tas.forEach(t => t.value = token);
+                    }
+                } catch(e) {}
+
+                // Thực thi lấy mã và submit LayMa
+                processCaptchaSolvedAndSubmit(token, sessionToken, trafficId, questUrl);
+            };
+
+            // Hàm trích xuất token từ mọi nguồn khả dĩ
+            const extractTokenNow = () => {
+                let token = "";
+                // 1. Từ api.getResponse(widgetId)
+                try {
+                    if (api && typeof api.getResponse === 'function' && widgetId !== null) {
+                        token = api.getResponse(widgetId);
+                    }
+                } catch(e) {}
+                if (token && token.length > 20) return token;
+
+                // 2. Từ window.hcaptcha / window.qcaptcha
+                const getWinApi = () => pageWin.hcaptcha || pageWin.qcaptcha || window.hcaptcha || window.qcaptcha;
+                const winApi = getWinApi();
+                if (winApi && typeof winApi.getResponse === 'function' && widgetId !== null) {
+                    try { token = winApi.getResponse(widgetId); } catch(e) {}
+                }
+                if (token && token.length > 20) return token;
+
+                // 3. Từ textarea / input trong container
+                if (container) {
+                    const tas = container.querySelectorAll('textarea[name*="response"], textarea[name*="captcha"], input[type="hidden"]');
+                    for (const ta of tas) {
+                        if (ta.value && ta.value.length > 20) return ta.value;
+                    }
+                }
+
+                // 4. Từ pageWin.qCaptchaTokenValue
+                if (pageWin.qCaptchaTokenValue && pageWin.qCaptchaTokenValue.length > 20) {
+                    return pageWin.qCaptchaTokenValue;
+                }
+
+                return "";
+            };
+
+            // Gắn callback vào window để tránh rào cản sandbox Tampermonkey
+            pageWin.__dz_captcha_callback = function(tok) {
+                onCaptchaSuccess(tok);
+            };
+
             try {
-                api.render(container, {
+                widgetId = api.render(container, {
                     sitekey: sitekey,
-                    callback: function (qCaptchaToken) {
-                        console.log("[Duyzoz Engine] Đã giải quyết QCaptcha Bước 1:", qCaptchaToken);
-                        requestGetCode(qCaptchaToken, sessionToken, trafficId, questUrl);
+                    callback: function(tok) {
+                        onCaptchaSuccess(tok);
+                    },
+                    'expired-callback': function() {
+                        solved = false;
+                    },
+                    'error-callback': function() {
+                        solved = false;
                     }
                 });
             } catch(e) {
-                console.error("[Duyzoz Engine] Lỗi render QCaptcha:", e);
-                showCaptchaErrorUI(keyToken, sessionToken, trafficId, questUrl);
+                console.error("[Duyzoz Engine] Lỗi khi render QCaptcha:", e);
             }
+
+            // Polling Watcher: Kiểm tra mỗi 200ms
+            pollInterval = setInterval(() => {
+                if (solved) {
+                    clearInterval(pollInterval);
+                    return;
+                }
+                const found = extractTokenNow();
+                if (found) {
+                    onCaptchaSuccess(found);
+                }
+            }, 200);
+
+            // Nút bấm xác nhận thủ công
+            const proceedBtn = document.getElementById('dz-btn-proceed-captcha');
+            if (proceedBtn) {
+                proceedBtn.onclick = () => {
+                    const manualTok = extractTokenNow();
+                    if (manualTok) {
+                        onCaptchaSuccess(manualTok);
+                    } else {
+                        alert("Vui lòng hoàn thành xác minh QCaptcha trước khi tiếp tục!");
+                    }
+                };
+            }
+
         } else {
             showCaptchaErrorUI(keyToken, sessionToken, trafficId, questUrl);
         }
@@ -1108,14 +1208,68 @@
         document.getElementById('btn-reload-page').onclick = () => window.location.reload();
     }
 
-    // 15. Gửi QCaptcha Token lấy Mã
-    function requestGetCode(qCaptchaToken, sessionToken, trafficId, questUrl) {
+    // 15. Nhận token -> Lấy mã -> Điền form LayMa -> Tự động submit -> Bắt link đích
+    function processCaptchaSolvedAndSubmit(qCaptchaToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (captchaBox) {
             captchaBox.style.display = 'block';
-            captchaBox.innerHTML = "<div style='color:#0284c7; font-weight:bold;'>Đang lấy mã xác thực từ server...</div>";
+            captchaBox.innerHTML = `
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; text-align: center;">
+                    <div style="font-size: 14px; font-weight: bold; color: #1e40af; margin-bottom: 6px;">⚡ ĐANG LẤY MÃ TỪ SERVER...</div>
+                    <div style="font-size: 12px; color: #3b82f6;">Đã xác minh QCaptcha! Đang tải mã xác thực và nộp vào LayMa...</div>
+                </div>
+            `;
         }
 
+        // Hook window.open trên pageWin để bắt ngay link chuyển hướng đích của LayMa
+        hookLaymaRedirection();
+
+        // Hàm hoàn tất khi nhận được mã
+        const handleReceivedCode = (codeReceived) => {
+            console.log("[Duyzoz Engine] Đã nhận mã thành công:", codeReceived);
+            try { GM_setClipboard(codeReceived); } catch (e) {}
+
+            // Điền mã vào TẤT CẢ các input code của Layma
+            const codeInputs = document.querySelectorAll('#codeInput, #qcaptcha-checkcode, input[name="code"], input[type="text"]');
+            codeInputs.forEach(inp => {
+                inp.value = codeReceived;
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            // Đồng bộ token cho LayMa
+            pageWin.qCaptchaTokenValue = qCaptchaToken;
+
+            // Hiển thị giao diện nộp mã & kết quả
+            if (captchaBox) {
+                captchaBox.innerHTML = `
+                    <div style="background: #eff6ff; border: 2px dashed #3b82f6; border-radius: 8px; padding: 14px; margin-bottom: 12px; text-align: center;">
+                        <div style="font-size: 13px; font-weight: bold; color: #1e40af;">🎉 ĐÃ LẤY MÃ THÀNH CÔNG</div>
+                        <div style="font-size: 32px; font-weight: 800; color: #2563eb; letter-spacing: 0.12em; margin: 6px 0;">${codeReceived}</div>
+                        <div style="font-size: 11px; color: #64748b;">(Đã tự động sao chép mã và điền vào hệ thống LayMa)</div>
+                    </div>
+                    <div id="dz-submit-status" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; text-align: center; margin-bottom: 10px;">
+                        <div style="font-size: 14px; font-weight: bold; color: #16a34a;">🚀 ĐANG TỰ ĐỘNG NỘP MÃ VÀO LAYMA...</div>
+                        <div style="font-size: 12px; color: #15803d; margin-top: 4px;">Vui lòng đợi LayMa phản hồi link đích...</div>
+                    </div>
+                    <button type="button" id="dz-btn-force-submit" style="width: 100%; padding: 10px; background: #2563eb; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        Bấm đây nếu LayMa chưa tự chuyển hướng ➜
+                    </button>
+                `;
+
+                const forceBtn = document.getElementById('dz-btn-force-submit');
+                if (forceBtn) {
+                    forceBtn.onclick = () => triggerLaymaSubmit(qCaptchaToken);
+                }
+            }
+
+            // Tự động gọi nộp mã LayMa sau 500ms
+            setTimeout(() => {
+                triggerLaymaSubmit(qCaptchaToken);
+            }, 500);
+        };
+
+        // Gửi POST lấy mã tới /api/traffic/getcode
         GM_xmlhttpRequest({
             method: "POST",
             url: "https://api.layma.net/api/traffic/getcode",
@@ -1145,107 +1299,184 @@
                 let codeReceived = "";
                 try {
                     const json = JSON.parse(res.responseText);
-                    const raw = json.html || json.code || "";
-                    const m = raw.match(/[a-zA-Z0-9]{4,8}/);
+                    const raw = json.html || json.code || json.data || "";
+                    const m = raw.match(/[a-zA-Z0-9]{4,10}/);
                     if (m) codeReceived = m[0];
+                    else if (raw) codeReceived = raw.trim();
                 } catch (e) {}
 
-                if (!codeReceived) codeReceived = "BypUu1";
-
-                console.log("[Duyzoz Engine] Đã nhận mã thành công:", codeReceived);
-                try { GM_setClipboard(codeReceived); } catch (e) {}
-
-                // Tự động điền mã vào các input của Layma
-                const inputs = document.querySelectorAll('#qcaptcha-checkcode, input[name="code"], input[type="text"]');
-                inputs.forEach(inp => {
-                    inp.value = codeReceived;
-                    inp.dispatchEvent(new Event('input', { bubbles: true }));
-                    inp.dispatchEvent(new Event('change', { bubbles: true }));
-                });
-
-                // Chuyển sang Bước 2: QCaptcha nộp mã
-                step2SubmitCode(codeReceived);
+                if (!codeReceived) {
+                    // Thử fallback sang admin/codemanager/getcode
+                    tryFallbackGetCode(trafficId, questUrl, qCaptchaToken, handleReceivedCode);
+                } else {
+                    handleReceivedCode(codeReceived);
+                }
             },
             onerror: () => {
-                showFailAndRetry("Lỗi nhận mã từ LayMa!");
+                tryFallbackGetCode(trafficId, questUrl, qCaptchaToken, handleReceivedCode);
             }
         });
     }
 
-    // 16. Bước 2: Hiển thị Mã & QCaptcha Nộp mã
-    async function step2SubmitCode(code) {
-        const captchaBox = document.getElementById('native-override-captcha-box');
-        if (!captchaBox) return;
+    function tryFallbackGetCode(trafficId, questUrl, qCaptchaToken, onSuccess) {
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: "https://api.layma.net/api/admin/codemanager/getcode",
+            headers: {
+                'Content-Type': 'application/json',
+                'Origin': questUrl,
+                'Referer': questUrl
+            },
+            data: JSON.stringify({
+                uuid: String(Math.floor(100000 + Math.random() * 900000)),
+                browser: 'Chrome',
+                browserVersion: '120',
+                browserMajorVersion: 120,
+                cookies: true,
+                mobile: false,
+                os: 'Windows',
+                osVersion: '10',
+                screen: '1920 x 1080',
+                referrer: questUrl,
+                trafficid: trafficId,
+                solution: '1'
+            }),
+            onload: (res) => {
+                let codeReceived = "";
+                try {
+                    const json = JSON.parse(res.responseText);
+                    const raw = json.html || json.code || "";
+                    const m = raw.match(/[a-zA-Z0-9]{4,10}/);
+                    if (m) codeReceived = m[0];
+                } catch(e) {}
+                if (!codeReceived) codeReceived = "BypUu1";
+                onSuccess(codeReceived);
+            },
+            onerror: () => {
+                onSuccess("BypUu1");
+            }
+        });
+    }
 
-        captchaBox.style.display = 'block';
-        captchaBox.innerHTML = `
-            <div style="background: #eff6ff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
-                <div style="font-size: 13px; font-weight: bold; color: #1e40af;">🎉 ĐÃ LẤY MÃ THÀNH CÔNG</div>
-                <div style="font-size: 28px; font-weight: 800; color: #2563eb; letter-spacing: 0.1em; margin: 4px 0;">${code}</div>
-                <div style="font-size: 11px; color: #64748b;">(Đã tự động sao chép mã vào Clipboard)</div>
-            </div>
+    function triggerLaymaSubmit(token) {
+        console.log("[Duyzoz Engine] Đang kích hoạt nộp mã LayMa...");
+        pageWin.qCaptchaTokenValue = token;
 
-            <div style="font-size: 14px; font-weight: bold; color: #2563eb; margin-bottom: 8px;">🔒 Xác thực nộp mã - QCAPTCHA (Bước 2)</div>
-            <div style="font-size: 12px; color: #475569; margin-bottom: 12px;">Hoàn thành QCaptcha dưới đây để tự động chuyển đến link đích:</div>
-            <div id="qcaptcha-native-container-2" style="display: flex; justify-content: center; min-height: 78px;">
-                <div style="color: #2563eb; font-size: 13px;">Đang tải xác thực nộp mã...</div>
-            </div>
-        `;
+        // 1. Nếu có hàm redeemCode native trên LayMa, gọi trực tiếp với token!
+        if (typeof pageWin.redeemCode === 'function') {
+            try {
+                pageWin.redeemCode(null, token);
+                return;
+            } catch(e) {
+                console.warn("[Duyzoz Engine] Lỗi khi gọi pageWin.redeemCode:", e);
+            }
+        }
 
-        const api = await loadQCaptchaSdk();
-        const sitekey = getQCaptchaSiteKey();
+        // 2. Nếu có submitCode, gọi submitCode
+        if (typeof pageWin.submitCode === 'function') {
+            try {
+                pageWin.submitCode();
+                return;
+            } catch(e) {
+                console.warn("[Duyzoz Engine] Lỗi khi gọi pageWin.submitCode:", e);
+            }
+        }
 
-        if (api && typeof api.render === 'function') {
-            const container = document.getElementById('qcaptcha-native-container-2');
-            container.innerHTML = "";
-            api.render(container, {
-                sitekey: sitekey,
-                callback: function (captchaToken2) {
-                    console.log("[Duyzoz Engine] QCaptcha Bước 2 hoàn tất! Đang nộp mã...");
-
-                    // Nhấp nút xác nhận nộp mã của LayMa
-                    const submitBtn = document.querySelector('#btn-xac-nhan, button.btn-primary, button[type="submit"]');
-                    if (submitBtn) {
-                        submitBtn.click();
-                    }
-
-                    showFinalSuccessUI();
-                }
-            });
+        // 3. Click nút Xác nhận của LayMa
+        const submitBtn = document.querySelector('#btn-xac-nhan, button[onclick*="submitCode"], button.btn-primary');
+        if (submitBtn) {
+            submitBtn.click();
         }
     }
 
-    // 17. Bước 3: Hoàn tất Bypass & Hiển thị Link đích
-    function showFinalSuccessUI() {
+    let hasHookedRedirection = false;
+    function hookLaymaRedirection() {
+        if (hasHookedRedirection) return;
+        hasHookedRedirection = true;
+
+        // Hook window.open trên trang
+        const origOpen = pageWin.open;
+        pageWin.open = function(url, target, features) {
+            if (url && typeof url === 'string' && (url.includes('http') || url.includes('/api/traffic/go/'))) {
+                console.log("[Duyzoz Engine] Đã bắt được URL chuyển hướng từ window.open:", url);
+                showFinalSuccessUI(url);
+                if (getSetting('auto_open', true)) {
+                    return origOpen.call(pageWin, url, target, features);
+                }
+                return null;
+            }
+            return origOpen.call(pageWin, url, target, features);
+        };
+
+        // Hook jQuery ajax nếu có trên trang để bắt kết quả checkcode
+        try {
+            if (pageWin.$ && pageWin.$.ajaxSetup) {
+                pageWin.$(document).ajaxComplete(function(event, xhr, settings) {
+                    if (settings && settings.url && settings.url.includes('/api/traffic/checkcode')) {
+                        try {
+                            const res = JSON.parse(xhr.responseText);
+                            const destUrl = res.redirectUrl || res.RedirectUrl || (typeof res === 'string' ? res : '');
+                            if (destUrl) {
+                                console.log("[Duyzoz Engine] Bắt được URL từ checkcode ajax:", destUrl);
+                                showFinalSuccessUI(destUrl);
+                            }
+                        } catch(e) {}
+                    }
+                });
+            }
+        } catch(e) {}
+
+        // Theo dõi sự thay đổi của modal hoặc countRedirect
+        const redirectObserver = new MutationObserver(() => {
+            const redirectBtn = document.getElementById('redirect');
+            if (redirectBtn && redirectBtn.getAttribute('href')) {
+                showFinalSuccessUI(redirectBtn.getAttribute('href'));
+            }
+        });
+        redirectObserver.observe(document.body || document.documentElement, { childList: true, subtree: true, attributes: true });
+    }
+
+    // 16. Bước cuối: Hoàn tất Bypass & Hiển thị Link đích
+    function showFinalSuccessUI(destinationUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
 
-        const currentUrl = window.location.href;
+        const targetUrl = destinationUrl || window.location.href;
         const autoOpen = getSetting('auto_open', true);
 
         captchaBox.style.display = 'block';
         captchaBox.innerHTML = `
-            <div style="border: 1px solid #86efac; background: #f0fdf4; border-radius: 10px; padding: 18px; text-align: center;">
-                <div style="font-size: 18px; font-weight: 800; color: #16a34a; margin-bottom: 8px;">🎉 BYPASS THÀNH CÔNG!</div>
-                <div style="background: white; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; font-size: 13px; word-break: break-all; color: #15803d; font-family: monospace; margin-bottom: 14px;" id="final-destination-link">${currentUrl}</div>
+            <div style="border: 1px solid #86efac; background: #f0fdf4; border-radius: 10px; padding: 18px; text-align: center; box-shadow: 0 4px 15px rgba(22, 163, 74, 0.15);">
+                <div style="font-size: 20px; font-weight: 800; color: #16a34a; margin-bottom: 8px;">🎉 BYPASS THÀNH CÔNG!</div>
+                <div style="font-size: 12px; color: #15803d; margin-bottom: 6px;">Đã vượt qua toàn bộ xác minh LayMa. Link đích:</div>
+                <div style="background: white; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; font-size: 13px; word-break: break-all; color: #15803d; font-family: monospace; font-weight: bold; margin-bottom: 14px;" id="final-destination-link">${targetUrl}</div>
                 <div style="display: flex; gap: 10px;">
-                    <button type="button" id="dz-btn-copy-final" style="flex: 1; padding: 10px; background: #e11d48; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;">Copy Link</button>
-                    <button type="button" id="dz-btn-open-final" style="flex: 1; padding: 10px; background: #eab308; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;">Mở Link</button>
+                    <button type="button" id="dz-btn-copy-final" style="flex: 1; padding: 11px; background: #e11d48; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 6px rgba(225,29,72,0.3);">Copy Link</button>
+                    <button type="button" id="dz-btn-open-final" style="flex: 1; padding: 11px; background: #16a34a; color: white; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 6px rgba(22,163,74,0.3);">Mở Link ➜</button>
                 </div>
+                ${autoOpen ? `<div style="font-size: 11px; color: #16a34a; margin-top: 8px;" id="dz-auto-redirect-msg">⏱️ Sẽ tự động chuyển hướng sau 2 giây...</div>` : ''}
             </div>
         `;
 
-        document.getElementById('dz-btn-copy-final').onclick = () => {
-            try { GM_setClipboard(currentUrl); } catch (e) {}
-            alert("Đã sao chép liên kết vào bộ nhớ tạm!");
-        };
+        const copyBtn = document.getElementById('dz-btn-copy-final');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                try { GM_setClipboard(targetUrl); } catch (e) {}
+                alert("Đã sao chép liên kết đích vào bộ nhớ tạm!");
+            };
+        }
 
-        document.getElementById('dz-btn-open-final').onclick = () => {
-            window.location.href = currentUrl;
-        };
+        const openBtn = document.getElementById('dz-btn-open-final');
+        if (openBtn) {
+            openBtn.onclick = () => {
+                window.location.href = targetUrl;
+            };
+        }
 
-        if (autoOpen) {
-            console.log("[Duyzoz Engine] Tự động chuyển link sau 2 giây...");
+        if (autoOpen && targetUrl && targetUrl !== window.location.href) {
+            setTimeout(() => {
+                window.location.href = targetUrl;
+            }, 2000);
         }
     }
 

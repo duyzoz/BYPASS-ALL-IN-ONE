@@ -104,13 +104,29 @@ Các chế độ hỗ trợ:
 ```
 
 ### 2. Cài đặt Userscript cho Trình duyệt
-1. Cài đặt tiện ích mở rộng [Tampermonkey](https://www.tampermonkey.net/) vào trình duyệt của bạn.
-2. Mở dashboard của Tampermonkey $\to$ Chọn **Tạo script mới (Create a new script)**.
-3. Sao chép toàn bộ nội dung file [`bypass_hud.user.js`](bypass_hud.user.js) và dán vào.
-4. Bấm **File $\to$ Save** (hoặc nhấn `Ctrl + S`).
-5. Khi bạn truy cập vào các trang rút gọn được hỗ trợ, giao diện HUD tự động kích hoạt.
+Bạn có thể cài đặt trực tiếp vào Tampermonkey qua URL:
+👉 **[Cài đặt Bypass HUD UserScript](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js)**
+
+Hoặc cài thủ công:
+1. Mở tiện ích mở rộng [Tampermonkey](https://www.tampermonkey.net/) trên trình duyệt.
+2. Chọn **Tiện ích $\to$ Thêm script mới (Add a new script)** hoặc **Cài đặt từ URL (Install from URL)**.
+3. Dán đường link:
+   ```
+   https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
+   ```
+4. Bấm **Install** (Cài đặt).
+5. Khi bạn truy cập vào các trang LayMa.net hoặc Link4Sub, script sẽ tự động kích hoạt giao diện **Made by Duyzoz ✦** đè trực tiếp sạch sẽ (không làm mờ trang web).
 
 ---
+
+### 🔥 Tính năng đặc sắc V3.2.0 (Duyzoz Edition):
+- 💎 **Đè trực tiếp lên trang (Clean In-Page DOM)**: Loại bỏ hoàn toàn lớp mờ toàn màn hình gây khó chịu. Toàn bộ nội dung rác cũ của Layma được xóa/ẩn sạch sẽ, nhường chỗ cho giao diện hiện đại với hiệu ứng Shimmer gradient độc quyền.
+- 🎯 **Nhận diện nhiệm vụ qua ảnh thông minh (Image-to-Quest AI Mapping)**: Nhận diện hơn 47+ ảnh nhiệm vụ Layma, tự động chuyển đổi sang URL đích.
+- 🔁 **Tự động đổi nhiệm vụ lỗi & Blacklist**: Tự động lọc các trang web lỗi hoặc blacklist (`codecubicle`, `aligninterio`), tự động click đổi nhiệm vụ cho tới khi tìm được link bypass ngon.
+- 🛡️ **Chuẩn quy trình QCaptcha 2 bước**:
+  - **Bước 1**: Đếm ngược thật theo phiên backend $\to$ Hiện QCaptcha giải mã $\to$ Tự động gửi API nhận mã code.
+  - **Bước 2**: Tự động điền mã $\to$ Xác thực QCaptcha nộp mã $\to$ Click nút hoàn tất và hiển thị link đích.
+- ⚡ **Link4Sub True Instant Bypass**: Tự động đọc payload Base64 và chuyển hướng ngay lập tức mà không cần click sub/like.
 
 ## 🔧 Các nền tảng được hỗ trợ
 

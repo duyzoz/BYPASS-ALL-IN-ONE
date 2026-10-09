@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      4.0.0
+// @version      4.0.1
 // @description  Clean 4-Layer Native DOM Bypass for LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -87,7 +87,12 @@
         if (!text || link4SubFound) return;
         try {
             const json = JSON.parse(text);
-            const rawUrl = json?.data?.data?.lnk?.lnk1?.url || json?.lnk?.lnk1?.url;
+            let rawUrl = null;
+            if (json && json.data && json.data.data && json.data.data.lnk && json.data.data.lnk.lnk1) {
+                rawUrl = json.data.data.lnk.lnk1.url;
+            } else if (json && json.lnk && json.lnk.lnk1) {
+                rawUrl = json.lnk.lnk1.url;
+            }
             if (rawUrl) {
                 const decoded = decodeURIComponent(atob(rawUrl));
                 if (decoded.startsWith('http')) {
@@ -193,7 +198,12 @@
                 pageWin.fetch = async function (...args) {
                     const response = await origFetch.apply(this, args);
                     try {
-                        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+                        let url = '';
+                        if (typeof args[0] === 'string') {
+                            url = args[0];
+                        } else if (args[0] && args[0].url) {
+                            url = args[0].url;
+                        }
                         const clone = response.clone();
                         clone.text().then(text => handleApiResponseText(url, text));
                     } catch (e) {}

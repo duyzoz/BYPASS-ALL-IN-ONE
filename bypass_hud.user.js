@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.8.0
+// @version      3.9.0
 // @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Lắng nghe xác thực QCaptcha đa tầng, tự động lấy mã, auto submit LayMa & chuyển hướng link đích) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -672,7 +672,7 @@
         `;
         wrap.insertBefore(topHeader, wrap.firstChild);
 
-        const autoChange = getSetting('auto_change', false);
+        const autoChange = getSetting('auto_change', true);
         const blacklistAutoChange = getSetting('blacklist_auto_change', true);
         const autoOpen = getSetting('auto_open', true);
         const autoSave = getSetting('auto_save', false);
@@ -892,8 +892,9 @@
                             } catch (e) {}
 
                             if (!trafficId) {
-                                console.warn("[Duyzoz Engine] Campaign ID null/invalid, triggering fail-fast!");
-                                showFailAndRetry("❌ Khởi tạo chiến dịch thất bại trên máy chủ LayMa. Vui lòng đổi nhiệm vụ!");
+                                console.warn("[Duyzoz Engine] Campaign ID null/invalid, triggering fast auto-change!");
+                                showFailAndRetry("❌ Chiến dịch này đã hết hạn. Đang tự động chuyển sang nhiệm vụ mới...");
+                                setTimeout(() => triggerChangeTask("Chiến dịch hết hạn từ server LayMa"), 800);
                                 return;
                             }
 

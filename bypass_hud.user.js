@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      4.1.0
+// @version      4.1.1
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -871,6 +871,23 @@
 
         captchaBox.innerHTML = "<div style='color:#0284c7; font-weight:bold;'>Đang lấy thông tin Traffic Key...</div>";
 
+        // ---- pickTrafficId: extracts real GUID trafficId from campaign response ----
+        function pickTrafficId(cj) {
+            if (!cj || typeof cj !== "object") return "";
+            const candidates = [
+                cj.trafficId,
+                cj.TrafficId,
+                cj.id,
+                cj.data && cj.data.trafficId,
+                cj.data && cj.data.TrafficId,
+                cj.data && cj.data.id
+            ];
+            for (const v of candidates) {
+                if (v != null && String(v).trim() !== "") return String(v).trim();
+            }
+            return "";
+        }
+
         function connectCampaignWithToken(keyToken) {
             console.log("[Duyzoz Engine] Khởi tạo session với KeyToken:", keyToken);
 
@@ -898,36 +915,34 @@
                             'Referer': questUrl
                         },
                         onload: (cRes) => {
+                            console.log("[Duyzoz] campaign raw:", cRes.responseText);
+
                             let trafficId = "";
                             let waitInput = document.getElementById('input-wait-time');
                             let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
                             try {
                                 const cj = JSON.parse(cRes.responseText);
-                                trafficId = cj.id;
+                                trafficId = pickTrafficId(cj);
                                 if (cj.requiredWaitSeconds) serverWait = Math.max(serverWait, cj.requiredWaitSeconds);
                             } catch (e) {}
 
                             if (!trafficId) {
-                                console.warn("[Duyzoz Engine] Server LayMa báo hết chiến dịch (400), tự động dùng đếm ngược dự phòng 85s!");
-                                trafficId = keyToken;
-                                if (!serverWait || serverWait < 10) serverWait = 85;
+                                console.warn("[Duyzoz Engine] Campaign không trả TrafficId hợp lệ — HTTP " + cRes.status + ". Body:", cRes.responseText);
+                                showFailAndRetry("❌ Campaign không trả TrafficId — đổi nhiệm vụ hoặc thử lại!");
+                                return;
                             }
 
                             runCountdown(serverWait, keyToken, sessionToken, trafficId, questUrl);
                         },
                         onerror: () => {
-                            console.warn("[Duyzoz Engine] Lỗi kết nối Campain, tự động dùng đếm ngược dự phòng 85s.");
-                            let waitInput = document.getElementById('input-wait-time');
-                            let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
-                            runCountdown(serverWait, keyToken, sessionToken, keyToken, questUrl);
+                            console.warn("[Duyzoz Engine] Lỗi kết nối Campain — không thể lấy TrafficId.");
+                            showFailAndRetry("❌ Không kết nối được server campaign. Vui lòng đổi nhiệm vụ!");
                         }
                     });
                 },
                 onerror: () => {
-                    console.warn("[Duyzoz Engine] Lỗi kết nối Session, tự động dùng đếm ngược dự phòng 85s.");
-                    let waitInput = document.getElementById('input-wait-time');
-                    let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
-                    runCountdown(serverWait, keyToken, "", keyToken, questUrl);
+                    console.warn("[Duyzoz Engine] Lỗi kết nối Session — không thể khởi tạo session.");
+                    showFailAndRetry("❌ Không kết nối được server session. Vui lòng thử lại!");
                 }
             });
         }
@@ -1214,8 +1229,12 @@
             qCaptchaLen: qCaptchaToken && qCaptchaToken.length
         });
 
-        if (!trafficId) {
-            showFailAndRetry("❌ Thiếu TrafficId — campaign/session chưa có sẵn. Vui lòng đổi nhiệm vụ!");
+        // trafficId phải tồn tại và trông như GUID (có dấu - hoặc dài ≥20 ký tự)
+        // Nếu nó là keyToken ngắn → bị từ chối ngay
+        const looksLikeGuid = trafficId && (trafficId.includes("-") || trafficId.length >= 20);
+        if (!trafficId || !looksLikeGuid) {
+            console.error("[Duyzoz] TrafficId không hợp lệ:", trafficId);
+            showFailAndRetry("❌ TrafficId không hợp lệ (có thể bị nhầm keyToken) — đổi nhiệm vụ!");
             return;
         }
         if (!qCaptchaToken || qCaptchaToken.length < 20) {

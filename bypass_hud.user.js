@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.9.0
+// @version      3.9.1
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1163,6 +1163,53 @@
         document.getElementById('btn-reload-page').onclick = () => window.location.reload();
     }
 
+    function extractRealCode(text) {
+        if (!text) return "";
+
+        try {
+            const json = JSON.parse(text);
+            const candidates = [
+                json.code,
+                json.html,
+                json.data,
+                (json.data && json.data.code),
+                (json.data && json.data.html),
+                json.result,
+                json.message,
+                json.Code,
+                json.Html
+            ];
+
+            for (let c of candidates) {
+                if (!c) continue;
+                const str = String(c).trim();
+
+                if (str.startsWith('http') || str.includes('://')) continue;
+
+                if (/^[A-Za-z0-9]{4,10}$/.test(str) && !str.toLowerCase().includes('http') && str.toLowerCase() !== 'https') {
+                    return str;
+                }
+
+                const m = str.match(/\b[A-Za-z0-9]{5,9}\b/);
+                if (m && !m[0].toLowerCase().startsWith('http') && m[0].toLowerCase() !== 'https') {
+                    return m[0];
+                }
+            }
+        } catch (e) {}
+
+        const blacklist = ['https', 'http', 'www', 'layma', 'traffic', 'session', 'captcha', 'token', 'chrome', 'windows', 'false', 'true', 'null', 'undefined'];
+        const matches = text.match(/\b[A-Za-z0-9]{5,9}\b/g) || [];
+
+        for (const m of matches) {
+            const lower = m.toLowerCase();
+            if (blacklist.some(b => lower.includes(b))) continue;
+            if (/^\d+$/.test(m)) continue;
+            return m;
+        }
+
+        return "";
+    }
+
     function processCaptchaSolvedAndSubmit(qCaptchaToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (captchaBox) {
@@ -1247,73 +1294,42 @@
                 console.log("[Duyzoz] getcode status:", res.status);
                 console.log("[Duyzoz] getcode body:", res.responseText);
 
-                const captchaBox = document.getElementById('native-override-captcha-box');
-                if (captchaBox) {
-                    captchaBox.style.display = 'block';
-                    captchaBox.innerHTML = `
-                        <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:12px; max-height:320px; overflow:auto; text-align:left; white-space:pre-wrap; word-break:break-all;">
-                            <div style="color:#38bdf8; font-weight:bold; margin-bottom:8px;">📦 GETCODE RESPONSE (status: ${res.status})</div>
-                            ${(res.responseText || "").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-                        </div>
-                        <div style="margin-top:12px; display:flex; gap:8px;">
-                            <button type="button" id="dz-copy-raw" style="flex:1; padding:9px; background:#3b82f6; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Copy Response</button>
-                            <button type="button" id="dz-retry-raw" style="flex:1; padding:9px; background:#f59e0b; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Thử lại</button>
-                        </div>
-                    `;
-
-                    const copyBtn = document.getElementById('dz-copy-raw');
-                    if (copyBtn) {
-                        copyBtn.onclick = () => {
-                            try {
-                                GM_setClipboard(res.responseText);
-                                alert('Đã copy response vào clipboard!');
-                            } catch(e) {
-                                prompt('Copy thủ công:', res.responseText);
-                            }
-                        };
-                    }
-                    const retryBtn = document.getElementById('dz-retry-raw');
-                    if (retryBtn) {
-                        retryBtn.onclick = () => executeLaymaBypass();
-                    }
-                }
-
-                let codeReceived = "";
-                try {
-                    const json = JSON.parse(res.responseText);
-                    const candidates = [
-                        json.code,
-                        json.html,
-                        json.data,
-                        (json.data && json.data.code),
-                        (json.data && json.data.html),
-                        json.result,
-                        json.message,
-                        json.Code,
-                        json.Html
-                    ];
-                    for (const c of candidates) {
-                        if (!c) continue;
-                        const str = typeof c === 'string' ? c : JSON.stringify(c);
-                        const m = str.match(/[A-Za-z0-9]{4,12}/);
-                        if (m) { codeReceived = m[0]; break; }
-                        if (/^[A-Za-z0-9]{4,12}$/.test(str.trim())) {
-                            codeReceived = str.trim();
-                            break;
-                        }
-                    }
-                    if (!codeReceived) {
-                        const m2 = res.responseText.match(/[A-Za-z0-9]{5,10}/g);
-                        if (m2) codeReceived = m2.find(x => x.length <= 10) || m2[0];
-                    }
-                } catch (e) {
-                    console.warn("[Duyzoz] Parse getcode lỗi:", e);
-                    const m3 = res.responseText.match(/[A-Za-z0-9]{5,10}/);
-                    if (m3) codeReceived = m3[0];
-                }
+                const codeReceived = extractRealCode(res.responseText);
 
                 if (codeReceived) {
+                    console.log("[Duyzoz Engine] Đã trích xuất mã thành công:", codeReceived);
                     handleReceivedCode(codeReceived);
+                } else {
+                    const captchaBox = document.getElementById('native-override-captcha-box');
+                    if (captchaBox) {
+                        captchaBox.style.display = 'block';
+                        captchaBox.innerHTML = `
+                            <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:12px; max-height:320px; overflow:auto; text-align:left; white-space:pre-wrap; word-break:break-all;">
+                                <div style="color:#f43f5e; font-weight:bold; margin-bottom:8px;">⚠️ CHƯA LẤY ĐƯỢC MÃ THẬT (status: ${res.status})</div>
+                                ${(res.responseText || "").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                            </div>
+                            <div style="margin-top:12px; display:flex; gap:8px;">
+                                <button type="button" id="dz-copy-raw" style="flex:1; padding:9px; background:#3b82f6; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Copy Response</button>
+                                <button type="button" id="dz-retry-raw" style="flex:1; padding:9px; background:#f59e0b; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Thử lại</button>
+                            </div>
+                        `;
+
+                        const copyBtn = document.getElementById('dz-copy-raw');
+                        if (copyBtn) {
+                            copyBtn.onclick = () => {
+                                try {
+                                    GM_setClipboard(res.responseText);
+                                    alert('Đã copy response vào clipboard!');
+                                } catch(e) {
+                                    prompt('Copy thủ công:', res.responseText);
+                                }
+                            };
+                        }
+                        const retryBtn = document.getElementById('dz-retry-raw');
+                        if (retryBtn) {
+                            retryBtn.onclick = () => executeLaymaBypass();
+                        }
+                    }
                 }
             },
             onerror: () => {

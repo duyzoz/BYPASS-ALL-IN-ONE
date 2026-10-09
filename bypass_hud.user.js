@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.8.0
+// @version      3.8.1
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -592,13 +592,24 @@
     let lastChangeTime = 0;
     function triggerChangeTask(reason) {
         const now = Date.now();
-        if (now - lastChangeTime < 3000) {
+        if (now - lastChangeTime < 1500) {
             console.warn("[Duyzoz Engine] Đang chờ cooldown đổi nhiệm vụ...");
             return;
         }
         lastChangeTime = now;
         console.warn("[Duyzoz Engine] Thực hiện đổi nhiệm vụ vì:", reason);
 
+        if (typeof pageWin.doiNhiemVu === 'function') {
+            try {
+                pageWin.doiNhiemVu();
+                return;
+            } catch(e) {}
+        }
+        if (typeof pageWin.clickDoiNhiemVu === 'function') {
+            try {
+                pageWin.clickDoiNhiemVu();
+            } catch(e) {}
+        }
         if (typeof pageWin.executeChangeMission === 'function') {
             try {
                 pageWin.executeChangeMission();
@@ -606,7 +617,7 @@
             } catch(e) {}
         }
 
-        const btn = document.querySelector('#btn-baoloi, a#btn-baoloi, button.btn-danger, button[onclick*="baoloi"]');
+        const btn = document.querySelector('#btn-baoloi, a#btn-baoloi, button.btn-danger, button[onclick*="baoloi"], button[onclick*="DoiNhiemVu"]');
         if (btn) {
             btn.click();
         }
@@ -615,8 +626,13 @@
     }
 
     function autoConfirmTaskModal() {
+        if (typeof pageWin.doiNhiemVu === 'function') {
+            try {
+                pageWin.doiNhiemVu();
+            } catch(e) {}
+        }
         const clickConfirm = () => {
-            const confirmBtn = document.querySelector('#btnXacNhanDoiNhiemVu, #modalNhiemVu button.btn-primary, .modal button.btn-warning, button[onclick*="doiNhiemVu"]');
+            const confirmBtn = document.querySelector('#btnXacNhanDoiNhiemVu, #modalFooterNhiemVu button.btn-primary, #myModalNhiemVu button.btn-primary, .modal button.btn-warning, button[onclick*="doiNhiemVu"]');
             if (confirmBtn) {
                 confirmBtn.click();
                 return true;
@@ -625,25 +641,25 @@
         };
 
         if (!clickConfirm()) {
-            setTimeout(clickConfirm, 100);
-            setTimeout(clickConfirm, 300);
-            setTimeout(clickConfirm, 700);
+            setTimeout(clickConfirm, 50);
+            setTimeout(clickConfirm, 200);
+            setTimeout(clickConfirm, 500);
         }
     }
 
     setInterval(() => {
-        const modalNv = document.getElementById('modalNhiemVu');
+        const modalNv = document.getElementById('myModalNhiemVu') || document.getElementById('modalNhiemVu');
         if (modalNv && modalNv.style.display !== 'none' && modalNv.style.display !== '') {
             autoConfirmTaskModal();
         }
 
-        const thongBao = document.getElementById('modalThongbao');
+        const thongBao = document.getElementById('modalThongbao') || document.getElementById('myModalThongbao');
         if (thongBao && thongBao.style.display !== 'none' && thongBao.style.display !== '') {
-            const btnClose = document.getElementById('btnDongThongBao') || thongBao.querySelector('button, .close');
+            const btnClose = document.getElementById('btnDongThongBao') || document.getElementById('closeThongBao') || thongBao.querySelector('button, .close');
             if (btnClose) btnClose.click();
             thongBao.style.display = 'none';
         }
-    }, 400);
+    }, 300);
 
     function initLayMaNativeUI() {
         const isLayma = window.location.hostname.includes('layma') || !!document.querySelector('.box-step-wrap, #hinh_nv, #qcaptcha-checkcode');
@@ -756,7 +772,7 @@
         if (!questInfoBox || !captchaBox) return;
 
         const detected = detectQuestUrl();
-        const autoChangeOnError = getSetting('auto_change', false);
+        const autoChangeOnError = getSetting('auto_change', true);
         const autoChangeBlacklist = getSetting('blacklist_auto_change', true);
         const imgSrc = detected.imgSrc || extractTaskImage();
         const keyword = extractKeyword();
@@ -962,14 +978,14 @@
             </div>
             <div style='display:flex; gap:10px; width:100%;'>
                 <button type='button' id='btn-native-retry' style='flex:1; padding:8px; background:#f59e0b; color:white; font-weight:bold; border:none; border-radius:6px; cursor:pointer;'>Thử lại</button>
-                <button type='button' id='btn-native-change' style='flex:1; padding:8px; background:#ef4444; color:white; font-weight:bold; border:none; border-radius:6px; cursor:pointer;'>Đổi nhiệm vụ</button>
+                <button type='button' id='btn-native-change' style='flex:1; padding:8px; background:#ef4444; color:white; font-weight:bold; border:none; border-radius:6px; cursor:pointer;'>Đổi nhiệm vụ ngay ➜</button>
             </div>
         `;
         document.getElementById('btn-native-retry').onclick = () => executeLaymaBypass();
         document.getElementById('btn-native-change').onclick = () => triggerChangeTask("Người dùng bấm Đổi NV");
 
-        if (getSetting('auto_change', false)) {
-            setTimeout(() => triggerChangeTask("Tự động đổi NV khi lỗi chiến dịch"), 1500);
+        if (getSetting('auto_change', true)) {
+            setTimeout(() => triggerChangeTask("Tự động đổi NV khi lỗi chiến dịch"), 1000);
         }
     }
 

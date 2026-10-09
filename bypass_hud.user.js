@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.9.2
+// @version      3.9.3
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1167,10 +1167,10 @@
         if (!text) return "";
 
         const BAD = new Set([
-            "https", "http", "www", "html", "tools", "token", "chrome",
-            "window", "script", "error", "false", "true", "null", "data",
-            "code", "layma", "traffic", "session", "captcha", "success",
-            "message", "result", "status", "origin", "referer"
+            "https", "http", "www", "html", "tools", "token", "chrome", "window",
+            "script", "error", "false", "true", "null", "data", "code", "layma",
+            "traffic", "session", "captcha", "success", "message", "result",
+            "status", "origin", "referer", "rfc9110", "rfc", "9110"
         ]);
 
         const isCode = (s) => {
@@ -1179,6 +1179,7 @@
             if (!/^[A-Za-z0-9]{4,10}$/.test(s)) return false;
             if (BAD.has(s.toLowerCase())) return false;
             if (/^https?$/i.test(s)) return false;
+            if (/^rfc\d+$/i.test(s)) return false;
             if (!/[A-Za-z]/.test(s) || !/[0-9]/.test(s)) return false;
             return true;
         };
@@ -1292,19 +1293,31 @@
 
                 const codeReceived = extractRealCode(res.responseText);
 
-                if (codeReceived) {
-                    console.log("[Duyzoz Engine] Đã trích xuất mã thật thành công:", codeReceived);
-                    handleReceivedCode(codeReceived);
-                } else {
-                    const box = document.getElementById("native-override-captcha-box");
-                    if (box) {
-                        box.style.display = "block";
-                        box.innerHTML =
-                            "<pre style='white-space:pre-wrap;word-break:break-all;font-size:12px;text-align:left;max-height:280px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;'>" +
-                            "status: " + res.status + "\n\n" +
-                            String(res.responseText).replace(/</g, "&lt;") +
-                            "</pre>";
+                const box = document.getElementById("native-override-captcha-box");
+                if (box) {
+                    box.style.display = "block";
+                    box.innerHTML = `
+                        <div style="font-size:13px;font-weight:bold;margin-bottom:8px;color:#0284c7;">
+                            Extract: <b style="color:#e11d48;">${codeReceived || "(không có)"}</b> | status: ${res.status}
+                        </div>
+                        <pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;text-align:left;max-height:260px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:8px;">${
+                            String(res.responseText || "").replace(/</g,"&lt;")
+                        }</pre>
+                        <button type="button" id="dz-copy-raw" style="margin-top:8px;width:100%;padding:8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">
+                            Copy Response
+                        </button>
+                    `;
+                    const copyBtn = document.getElementById("dz-copy-raw");
+                    if (copyBtn) {
+                        copyBtn.onclick = () => {
+                            try { GM_setClipboard(res.responseText); alert("Đã copy"); }
+                            catch(e) { prompt("Copy:", res.responseText); }
+                        };
                     }
+                }
+
+                if (codeReceived) {
+                    // handleReceivedCode(codeReceived);
                 }
             },
             onerror: () => {

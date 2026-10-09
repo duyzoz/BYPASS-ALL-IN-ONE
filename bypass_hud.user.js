@@ -173,7 +173,9 @@
         "https://api.layma.net/media/images/posts/092026/07fae7c8aede4a2ca4633b9cc3316b96.png": "https://corrsa.co.in",
         "https://api.layma.net/media/images/posts/092026/2e5db2b140274749bf709f0553caacbf.png": "https://ideaswebcreator.com.co",
         "https://api.layma.net/media/images/posts/092026/cfa50a9c5bbd438f9d451c3c7e3fa9b1.png": "https://corrsa.co.in",
-        "https://api.layma.net/media/images/posts/092026/946fdc8a5504451e8a8b66686072891e.png": "https://adroitengineering.co.in"
+        "https://api.layma.net/media/images/posts/092026/946fdc8a5504451e8a8b66686072891e.png": "https://adroitengineering.co.in",
+        "https://api.layma.net/media/images/posts/102026/3b9b943772184a44bce4c65a4ed028c4.png": "https://idelec.com.co",
+        "3b9b943772184a44bce4c65a4ed028c4.png": "https://idelec.com.co"
     };
     const OFFLINE_BLACKLIST = ["codecubicle.co.in", "aligninterio.co.in"];
 

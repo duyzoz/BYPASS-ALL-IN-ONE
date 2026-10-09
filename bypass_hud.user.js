@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      4.1.1
+// @version      4.1.2
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -871,20 +871,51 @@
 
         captchaBox.innerHTML = "<div style='color:#0284c7; font-weight:bold;'>Đang lấy thông tin Traffic Key...</div>";
 
-        // ---- pickTrafficId: extracts real GUID trafficId from campaign response ----
-        function pickTrafficId(cj) {
+        // ---- pickTrafficId: aggressive multi-field scanner ----
+        function pickTrafficId(raw) {
+            // handle array wrapper: [{...}]
+            const cj = Array.isArray(raw) ? raw[0] : raw;
             if (!cj || typeof cj !== "object") return "";
-            const candidates = [
-                cj.trafficId,
-                cj.TrafficId,
-                cj.id,
-                cj.data && cj.data.trafficId,
-                cj.data && cj.data.TrafficId,
-                cj.data && cj.data.id
+
+            // all plausible field names in one list
+            const KEYS = [
+                "trafficId","TrafficId","traffic_id","trafficid",
+                "id","Id","ID",
+                "campaignId","CampaignId","campaign_id","campaignid",
+                "cid","Cid","CID",
+                "tid","Tid","TID"
             ];
-            for (const v of candidates) {
+
+            // check root level
+            for (const k of KEYS) {
+                const v = cj[k];
                 if (v != null && String(v).trim() !== "") return String(v).trim();
             }
+
+            // check one level deep: data / result / payload / campaign
+            for (const wrapper of ["data","result","payload","campaign","Data","Result"]) {
+                const sub = cj[wrapper];
+                if (!sub || typeof sub !== "object") continue;
+                const subObj = Array.isArray(sub) ? sub[0] : sub;
+                for (const k of KEYS) {
+                    const v = subObj && subObj[k];
+                    if (v != null && String(v).trim() !== "") return String(v).trim();
+                }
+            }
+
+            // last resort: scan ALL string values that look like a GUID or long ID
+            const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const LONG_ID_RE = /^[A-Za-z0-9_-]{20,}$/;
+            for (const k of Object.keys(cj)) {
+                const v = cj[k];
+                if (typeof v === "string" && (GUID_RE.test(v.trim()) || LONG_ID_RE.test(v.trim()))) {
+                    // skip known non-id fields
+                    const kl = k.toLowerCase();
+                    if (kl.includes("token") || kl.includes("key") || kl.includes("url") || kl.includes("link") || kl.includes("name")) continue;
+                    return v.trim();
+                }
+            }
+
             return "";
         }
 

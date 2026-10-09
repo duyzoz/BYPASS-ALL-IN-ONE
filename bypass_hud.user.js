@@ -1,16 +1,13 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      4.1.0
-// @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Lắng nghe xác thực QCaptcha đa tầng, tự động lấy mã, auto submit LayMa & chuyển hướng link đích) & Link4Sub True Bypass.
+// @version      3.8.0
+// @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
 // @match        *://*.layma.net/*
 // @match        *://link4sub.com/*
 // @match        *://*.link4sub.com/*
-// @match        *://*/*
-// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
-// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -18,7 +15,9 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-start
-// ==UserScript==
+// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
+// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
+// ==/UserScript==
 
 (function () {
     'use strict';
@@ -884,7 +883,8 @@
                         },
                         onload: (cRes) => {
                             let trafficId = "";
-                            let serverWait = parseInt(document.getElementById('input-wait-time')?.value) || 85;
+                            let waitInput = document.getElementById('input-wait-time');
+                            let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
                             try {
                                 const cj = JSON.parse(cRes.responseText);
                                 trafficId = cj.id;
@@ -911,7 +911,8 @@
             });
         }
 
-        let keyToken = document.getElementById('tokenId')?.innerText?.trim() || "";
+        let tokenElem = document.getElementById('tokenId');
+        let keyToken = (tokenElem && tokenElem.innerText) ? tokenElem.innerText.trim() : "";
         if (!keyToken) {
             const path = window.location.pathname.replace(/^\//, '').trim();
             if (path && path.length >= 5 && !path.includes('/')) {

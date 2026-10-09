@@ -67,7 +67,7 @@ def push_file(filepath, token):
     sha = get_file_sha(filepath, token)
 
     payload = {
-        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.9.2 (Strict Alphanumeric Code Verification & Raw Body Debugger)",
+        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.9.3 (RFC9110 Blacklist & Mandatory Debug Response Viewer)",
         "content": content_b64,
         "branch": "main"
     }

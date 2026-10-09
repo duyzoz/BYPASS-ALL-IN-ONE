@@ -1,6 +1,6 @@
 {
   "name": "bypass-all-in-one",
-  "version": "3.9.2",
+  "version": "3.9.3",
   "description": "Bypass Short Link All-in-One Tool - JavaScript & Tampermonkey Edition by Duyzoz",
   "main": "bypass_tool.js",
   "scripts": {

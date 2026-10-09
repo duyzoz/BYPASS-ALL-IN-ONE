@@ -67,7 +67,7 @@ def push_file(filepath, token):
     sha = get_file_sha(filepath, token)
 
     payload = {
-        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.9.3 (RFC9110 Blacklist & Mandatory Debug Response Viewer)",
+        "message": f"Update {filepath} - Duyzoz Bypass All in One v4.0.0 (ASP.NET Web API Request Wrapper & Solution String Fix)",
         "content": content_b64,
         "branch": "main"
     }

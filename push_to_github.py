@@ -67,7 +67,7 @@ def push_file(filepath, token):
     sha = get_file_sha(filepath, token)
 
     payload = {
-        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.8.0 (Tampermonkey clean metadata fix & Auto-Bypass LayMa)",
+        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.9.0 (Full GetCode Response Debugger & Multi-Path Parser)",
         "content": content_b64,
         "branch": "main"
     }

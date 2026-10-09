@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      4.0.0
+// @version      4.1.0
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1208,6 +1208,21 @@
     }
 
     function processCaptchaSolvedAndSubmit(qCaptchaToken, sessionToken, trafficId, questUrl) {
+        console.log("[Duyzoz] getcode params", {
+            trafficId,
+            sessionToken: sessionToken && sessionToken.slice(0, 12),
+            qCaptchaLen: qCaptchaToken && qCaptchaToken.length
+        });
+
+        if (!trafficId) {
+            showFailAndRetry("❌ Thiếu TrafficId — campaign/session chưa có sẵn. Vui lòng đổi nhiệm vụ!");
+            return;
+        }
+        if (!qCaptchaToken || qCaptchaToken.length < 20) {
+            showFailAndRetry("❌ Thiếu QCaptcha token. Vui lòng thử lại!");
+            return;
+        }
+
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (captchaBox) {
             captchaBox.style.display = 'block';
@@ -1272,22 +1287,27 @@
                 'Accept': 'application/json, text/plain, */*'
             },
             data: JSON.stringify({
-                request: {
-                    uuid: String(Math.floor(100000 + Math.random() * 900000)),
-                    browser: 'Chrome',
-                    browserVersion: '120',
-                    browserMajorVersion: 120,
-                    cookies: true,
-                    mobile: false,
-                    os: 'Windows',
-                    osVersion: '10',
-                    screen: '1920 x 1080',
-                    referrer: questUrl,
-                    trafficId: trafficId,
-                    trafficSessionToken: sessionToken,
-                    solution: "1",
-                    qCaptchaToken: qCaptchaToken
-                }
+                uuid: String(Math.floor(100000 + Math.random() * 900000)),
+                browser: 'Chrome',
+                browserVersion: '120',
+                browserMajorVersion: 120,
+                cookies: true,
+                mobile: false,
+                os: 'Windows',
+                osVersion: '10',
+                screen: '1920 x 1080',
+                referrer: questUrl,
+
+                trafficId: String(trafficId || ""),
+                TrafficId: String(trafficId || ""),
+
+                trafficSessionToken: sessionToken || "",
+                TrafficSessionToken: sessionToken || "",
+
+                solution: String(qCaptchaToken || ""),
+                Solution: String(qCaptchaToken || ""),
+
+                qCaptchaToken: String(qCaptchaToken || "")
             }),
             onload: (res) => {
                 console.log("[Duyzoz] getcode status:", res.status);

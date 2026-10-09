@@ -28,6 +28,7 @@ FILES_TO_PUSH = [
     "README.md",
     "package.json",
     "bypass_hud.user.js",
+    "Auto_LaymaV2.user.js",
     "bypass_tool.js",
     "bypass_tool.py",
     "push_to_github.py"
@@ -66,7 +67,7 @@ def push_file(filepath, token):
     sha = get_file_sha(filepath, token)
 
     payload = {
-        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.6.0 (QCaptcha Multi-layer Watcher & Auto LayMa Redirect)",
+        "message": f"Update {filepath} - Duyzoz Bypass All in One v3.8.0 (Tampermonkey clean metadata fix & Auto-Bypass LayMa)",
         "content": content_b64,
         "branch": "main"
     }

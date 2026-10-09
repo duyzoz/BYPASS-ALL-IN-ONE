@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Layma.net Bypass - CUTTAY PROMAX
 // @namespace    http://tampermonkey.net/
-// @version      3.8.2
+// @version      3.9.0
 // @description  Auto nhiệm vụ lấy mã LayMa.net (Duyzoz Engine)
 // @author       Duyzoz
 // @match        https://layma.net/*

@@ -414,59 +414,114 @@ class BypassTool {
      */
     async laymanetBypass() {
         console.log("\n=== [6] LAYMANET BYPASS ===");
-        const urlConfigs = {
-            'https://bamivapharma.com/': { code: 'e9VJokISt' },
-            'https://suamatzenmilk.com/': { code: 'viyjUHvaj' },
-            'https://china-airline.net/': { code: 'oTedsZr2m', hurl: 'https://enzymevietnam.com/' },
-            'https://scarmagic-gm.com/': { code: 'e9VJokISt', hurl: 'https://bamivapharma.com/' }
-        };
+        let inputUrl = await ask("Nhập URL nhiệm vụ / domain đích (vd: https://idelec.com.co/): ");
+        if (!inputUrl.startsWith('http://') && !inputUrl.startsWith('https://')) {
+            inputUrl = 'https://' + inputUrl;
+        }
 
-        const inputUrl = await ask("Nhập URL nhiệm vụ: ");
-        const platform = (await ask("Nhập platform (facebook/google): ")).toLowerCase() || 'google';
-
-        let config = null;
-        for (const testUrl of Object.keys(urlConfigs)) {
-            if (inputUrl.includes(new URL(testUrl).hostname)) {
-                config = urlConfigs[testUrl];
-                break;
+        let keyToken = await ask("Nhập KeyToken (để trống để tự động quét từ URL): ");
+        if (!keyToken) {
+            console.log(`[*] Đang quét KeyToken từ ${inputUrl}...`);
+            try {
+                const pageRes = await fetch(inputUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                });
+                const pageText = await pageRes.text();
+                const m = pageText.match(/Traffic\/Index\/([a-zA-Z0-9_-]+)/i) || 
+                          pageText.match(/keytoken=([a-zA-Z0-9_-]+)/i) ||
+                          pageText.match(/layma\.net\/Traffic\/Index\/([a-zA-Z0-9_-]+)/i);
+                if (m) {
+                    keyToken = m[1];
+                    console.log(`[+] Tìm thấy KeyToken: ${keyToken}`);
+                } else {
+                    keyToken = await ask("[-] Không tìm thấy tự động. Nhập KeyToken thủ công: ");
+                }
+            } catch (err) {
+                keyToken = await ask(`[-] Lỗi khi tải URL (${err.message}). Nhập KeyToken thủ công: `);
             }
         }
 
-        if (!config) {
-            console.log("❌ URL chưa được cấu hình!");
+        if (!keyToken) {
+            console.log("❌ Không có KeyToken, hủy thao tác.");
             return;
         }
 
+        const platformChoice = await ask("Nhập platform (1: google, 2: tructiep [default: 2]): ");
+        const platform = platformChoice === '1' ? 'google' : 'tructiep';
+
         try {
-            console.log("Đang lấy thông tin chiến dịch...");
-            const campRes = await fetch(`https://api.layma.net/api/admin/campain?keytoken=${config.code}&flatform=${platform}`, {
-                headers: { 'Host': 'api.layma.net' }
+            console.log("[*] Khởi tạo Traffic Session...");
+            const sessRes = await fetch('https://api.layma.net/api/traffic/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyToken: keyToken })
             });
-            const campData = await campRes.json();
-            if (!campData || !campData.id) {
-                console.log("❌ Không lấy được campaign ID!");
+            const sessData = await sessRes.json();
+            const sessionToken = sessData?.sessionToken || sessData?.SessionToken;
+            if (!sessionToken) {
+                console.log("❌ Lỗi lấy Session Token!");
                 return;
             }
+            console.log(`[+] Session Token: ${sessionToken.substring(0, 20)}...`);
 
-            console.log("Đang nhận mã...");
-            const codeRes = await fetch('https://api.layma.net/api/admin/codemanager/getcode', {
+            console.log("[*] Đang lấy thông tin chiến dịch (Campaign)...");
+            const campRes = await fetch(`https://api.layma.net/api/admin/campain?keytoken=${keyToken}&flatform=${platform}&waitMode=1&requiredPageVisits=1`, {
+                headers: {
+                    'X-Traffic-Session': sessionToken,
+                    'Origin': inputUrl,
+                    'Referer': inputUrl
+                }
+            });
+            const campData = await campRes.json();
+            const trafficId = campData?.id || '';
+            const waitSeconds = Math.max(85, campData?.requiredWaitSeconds || 85);
+            console.log(`[+] Traffic ID: ${trafficId} | Wait Time: ${waitSeconds}s`);
+
+            console.log(`[*] Đếm ngược ${waitSeconds} giây theo quy định LayMa...`);
+            for (let remaining = waitSeconds; remaining > 0; remaining--) {
+                process.stdout.write(`\r[->] Thời gian còn lại: ${remaining}s... `);
+                await sleep(1000);
+            }
+            console.log("\n[+] Hoàn tất chờ!");
+
+            console.log("[*] Đang gửi yêu cầu nhận mã tới /api/traffic/getcode...");
+            const codeRes = await fetch('https://api.layma.net/api/traffic/getcode', {
                 method: 'POST',
-                headers: { 'content-type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Traffic-Session': sessionToken,
+                    'Origin': inputUrl,
+                    'Referer': inputUrl
+                },
                 body: JSON.stringify({
-                    uuid: this.rad,
+                    uuid: String(Math.floor(100000 + Math.random() * 900000)),
                     browser: 'Chrome',
                     browserVersion: '120',
+                    browserMajorVersion: 120,
+                    cookies: true,
+                    mobile: false,
+                    os: 'Windows',
+                    osVersion: '10',
                     screen: '1920 x 1080',
-                    trafficid: campData.id,
-                    solution: '1'
+                    referrer: inputUrl,
+                    trafficId: trafficId,
+                    trafficSessionToken: sessionToken,
+                    solution: 1
                 })
             });
 
             const codeData = await codeRes.json();
-            if (codeData && codeData.html) {
-                console.log(`\n🎉 MÃ XÁC NHẬN: \x1b[32m${codeData.html}\x1b[0m`);
+            const rawCode = codeData?.html || codeData?.code || codeData?.data || '';
+            const m = String(rawCode).match(/[a-zA-Z0-9]{4,10}/);
+            const finalCode = m ? m[0] : String(rawCode).trim();
+
+            if (finalCode) {
+                console.log(`\n========================================`);
+                console.log(`   🎉 BYPASS LAYMA THÀNH CÔNG!`);
+                console.log(`   MÃ NHẬN ĐƯỢC:  \x1b[32m${finalCode}\x1b[0m`);
+                console.log(`========================================\n`);
             } else {
-                console.log("❌ Lỗi lấy mã:", codeData);
+                console.log("❌ Không trích xuất được mã:", codeData);
             }
         } catch (err) {
             console.log(`❌ Lỗi: ${err.message}`);

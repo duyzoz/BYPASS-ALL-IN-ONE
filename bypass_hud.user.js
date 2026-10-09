@@ -916,19 +916,87 @@
                         },
                         onload: (cRes) => {
                             console.log("[Duyzoz] campaign raw:", cRes.responseText);
+                            console.log("[Duyzoz] campaign status:", cRes.status);
 
                             let trafficId = "";
+                            let parsedCj = null;
                             let waitInput = document.getElementById('input-wait-time');
                             let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
                             try {
-                                const cj = JSON.parse(cRes.responseText);
-                                trafficId = pickTrafficId(cj);
-                                if (cj.requiredWaitSeconds) serverWait = Math.max(serverWait, cj.requiredWaitSeconds);
+                                parsedCj = JSON.parse(cRes.responseText);
+                                trafficId = pickTrafficId(parsedCj);
+                                if (parsedCj.requiredWaitSeconds) serverWait = Math.max(serverWait, parsedCj.requiredWaitSeconds);
                             } catch (e) {}
 
                             if (!trafficId) {
                                 console.warn("[Duyzoz Engine] Campaign không trả TrafficId hợp lệ — HTTP " + cRes.status + ". Body:", cRes.responseText);
-                                showFailAndRetry("❌ Campaign không trả TrafficId — đổi nhiệm vụ hoặc thử lại!");
+
+                                // ── DIAGNOSTIC OVERLAY: hiện raw response lên màn hình ──
+                                const safeBody = String(cRes.responseText || "(empty)").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                                const allKeys = (() => {
+                                    try {
+                                        const walk = (obj, prefix) => {
+                                            if (!obj || typeof obj !== "object") return [];
+                                            return Object.keys(obj).flatMap(k => {
+                                                const full = prefix ? prefix + "." + k : k;
+                                                const val = obj[k];
+                                                const children = (val && typeof val === "object") ? walk(val, full) : [];
+                                                return [`<b>${full}</b>: <span style="color:#fbbf24">${JSON.stringify(val)}</span>`, ...children];
+                                            });
+                                        };
+                                        return walk(parsedCj, "").join("<br>");
+                                    } catch (e) { return "(parse failed)"; }
+                                })();
+
+                                const diagId = "dz-camp-diag-" + Date.now();
+                                const diagEl = document.createElement("div");
+                                diagEl.id = diagId;
+                                diagEl.style.cssText = [
+                                    "position:fixed","top:0","left:0","width:100%","height:100%",
+                                    "background:rgba(0,0,0,0.82)","z-index:2147483647",
+                                    "display:flex","align-items:center","justify-content:center",
+                                    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
+                                ].join(";");
+                                diagEl.innerHTML = `
+                                    <div style="background:#0f172a;border:2px solid #e11d48;border-radius:14px;padding:22px 24px;width:92%;max-width:640px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;">
+                                        <div style="font-size:16px;font-weight:800;color:#f8fafc;margin-bottom:6px;">
+                                            🔍 CAMPAIGN RESPONSE DEBUG
+                                            <span style="float:right;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:400;" id="${diagId}-close">✕ đóng</span>
+                                        </div>
+                                        <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">
+                                            HTTP Status: <b style="color:${cRes.status === 200 ? '#4ade80' : '#f87171'}">${cRes.status}</b>
+                                            &nbsp;|&nbsp; keyToken: <b style="color:#38bdf8">${String(keyToken).slice(0,20)}…</b>
+                                        </div>
+                                        <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:4px;">── ALL FIELDS (flat walk) ──</div>
+                                        <div style="font-size:11px;color:#e2e8f0;background:#1e293b;border-radius:8px;padding:10px;max-height:160px;overflow:auto;line-height:1.8;margin-bottom:10px;">
+                                            ${allKeys || "<span style='color:#f87171'>No parseable JSON</span>"}
+                                        </div>
+                                        <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:4px;">── RAW BODY ──</div>
+                                        <pre id="${diagId}-raw" style="white-space:pre-wrap;word-break:break-all;font-size:10px;color:#e2e8f0;background:#1e293b;border-radius:8px;padding:10px;max-height:140px;overflow:auto;margin:0 0 12px 0;">${safeBody}</pre>
+                                        <div style="display:flex;gap:8px;">
+                                            <button id="${diagId}-copy" style="flex:1;padding:9px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-weight:700;font-size:12px;cursor:pointer;">
+                                                📋 Copy Raw Response
+                                            </button>
+                                            <button id="${diagId}-close2" style="flex:1;padding:9px;background:#e11d48;color:#fff;border:none;border-radius:7px;font-weight:700;font-size:12px;cursor:pointer;">
+                                                Đổi nhiệm vụ
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(diagEl);
+                                const closeDiag = () => { try { diagEl.remove(); } catch(e){} };
+                                document.getElementById(diagId + "-close").onclick = closeDiag;
+                                document.getElementById(diagId + "-close2").onclick = () => {
+                                    closeDiag();
+                                    const btn = document.querySelector('.btn-change-task, [data-task="change"], #btn-change-quest');
+                                    if (btn) btn.click();
+                                };
+                                document.getElementById(diagId + "-copy").onclick = () => {
+                                    try { GM_setClipboard(cRes.responseText); } catch(e){}
+                                    document.getElementById(diagId + "-copy").textContent = "✅ Đã copy!";
+                                };
+
+                                showFailAndRetry("❌ Campaign không trả TrafficId — xem DEBUG overlay để biết field thật!");
                                 return;
                             }
 

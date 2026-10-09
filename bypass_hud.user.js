@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.3.0
-// @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Link ảnh hướng dẫn, Trích xuất từ khóa, Nút tiếp tục/đổi NV, Auto-detect image quest, QCaptcha 2 bước lấy & nộp mã) & Link4Sub True Bypass.
+// @version      3.4.0
+// @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Link ảnh hướng dẫn, Trích xuất từ khóa, Nút tiếp tục/đổi NV, Auto-detect image quest, Lắc báo sai tên miền, QCaptcha 2 bước lấy & nộp mã) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://layma.net/*
 // @match        *://*.layma.net/*
@@ -16,11 +16,14 @@
 // @grant        GM_getValue
 // @grant        GM_setClipboard
 // @grant        GM_addStyle
+// @grant        unsafeWindow
 // @run-at       document-start
 // ==/UserScript==
 
 (function () {
     'use strict';
+
+    const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
     /* =========================================================================
      *  PHẦN 1: BỘ GIẢI MÃ LINK4SUB (TRUE BYPASS - KHÔNG CẦN SUB/LIKE)
@@ -125,7 +128,7 @@
      *  PHẦN 2: BỘ GIẢI MÃ LAYMA.NET (CHUẨN 100% CỦA REPO PROJECTSCRIPT112247)
      * ========================================================================= */
 
-    // 1. Dữ liệu Image Map & Blacklist Offline (tích hợp sẵn 47 ảnh, tự động cập nhật từ cloud)
+    // 1. Dữ liệu Image Map & Blacklist Offline (tích hợp sẵn 50+ ảnh và tự động cập nhật từ cloud)
     const OFFLINE_IMAGE_MAP = {
         "https://api.layma.net/media/images/posts/082026/Screenshot_41.png": "https://marketingoffice.co.in",
         "https://api.layma.net/media/images/posts/082026/Screenshot_151.png": "https://workwithaarti.in",
@@ -179,11 +182,52 @@
     };
     const OFFLINE_BLACKLIST = ["codecubicle.co.in", "aligninterio.co.in"];
 
+    // 2. Bộ ánh xạ tự động bypass vĩnh viễn qua Từ Khóa (Persistent All-in-One auto-bypass)
+    const KEYWORD_AUTO_MAP = {
+        "102pets": "https://idelec.com.co",
+        "102pet": "https://idelec.com.co",
+        "nasons": "https://nasons.co.in",
+        "smileit": "https://smileitsolutions.co.in",
+        "corrsa": "https://corrsa.co.in",
+        "tambor": "https://tambor.com.co",
+        "agila": "https://www.agilafc.com/",
+        "ideassimples": "https://ideassimples.com.co",
+        "hpssonpur": "https://hpssonpur.co.in",
+        "adroit": "https://adroitengineering.co.in",
+        "caadda": "https://caadda.co.in/",
+        "casaactores": "https://casaactores.com.co/",
+        "helloalvie": "https://helloalvie.co/",
+        "rubensbits": "https://rubensbits.co/",
+        "black-sheep": "https://black-sheep.com.co/",
+        "bituplast": "https://bituplast.com.co/",
+        "citricos": "https://citricosavila.com.co/",
+        "brsystems": "https://www.brsystems.com.co/",
+        "talemtos": "https://talemtos.com.co/",
+        "socialbar": "https://socialbar.co.in/",
+        "alikafuel": "https://alikafuel.co.in",
+        "ideaswebcreator": "https://ideaswebcreator.com.co",
+        "marketingoffice": "https://marketingoffice.co.in",
+        "workwithaarti": "https://workwithaarti.in",
+        "stockmarket": "https://stockmarketdigest.in/",
+        "propmastery": "https://propmastery.co/",
+        "1gallery": "https://1gallery.com.co/",
+        "marcushanda": "https://www.marcushanda.co/",
+        "1bellanari": "https://1bellanarithebrand.com.co/",
+        "onlinejob": "https://onlinejob.com.co",
+        "go88gh": "https://go88gh.com/",
+        "go88yt": "https://go88yt.com/",
+        "go88en": "https://go88en.com/",
+        "sunkt": "https://sunwinkt.com/",
+        "sunmb": "https://sunwinmb.com/",
+        "sunvv": "https://sunwinvv.com/",
+        "sunbv": "https://sunwinbv.com"
+    };
+
     let liveImageMap = Object.assign({}, OFFLINE_IMAGE_MAP);
     let liveBlacklist = [...OFFLINE_BLACKLIST];
 
-    const QCAPTCHA_SITEKEY = "d0c97bcc-d88c-42d1-8a0c-1180bf53e2a1";
-    const QCAPTCHA_SCRIPT = "https://js.103-141-140-153.sslip.io/api.js";
+    const DEFAULT_QCAPTCHA_SITEKEY = "facd4b6c-53e6-44a2-9b27-b01844a6bd75";
+    const DEFAULT_QCAPTCHA_SCRIPT = "https://js.103-141-140-153.sslip.io/api.js?render=explicit&compat=hcaptcha";
 
     // Cấu hình lưu trữ
     function getSetting(key, def) {
@@ -213,6 +257,19 @@
             map[imgUrl] = questUrl;
             localStorage.setItem('duyzoz_manual_map', JSON.stringify(map));
         } catch (e) {}
+    }
+
+    // Lấy danh sách tên miền hợp lệ có trong hệ thống
+    function getKnownDomains() {
+        const domains = new Set();
+        Object.values(liveImageMap).forEach(u => {
+            try { domains.add(new URL(u).hostname.replace(/^www\./, '').toLowerCase()); } catch(e) {}
+        });
+        Object.values(KEYWORD_AUTO_MAP).forEach(u => {
+            try { domains.add(new URL(u).hostname.replace(/^www\./, '').toLowerCase()); } catch(e) {}
+        });
+        domains.add("idelec.com.co");
+        return Array.from(domains);
     }
 
     // Tải cấu hình từ cloud Pastefy
@@ -373,6 +430,19 @@
                 border-radius: 999px;
                 transition: width 1s linear;
             }
+
+            /* HIỆU ỨNG LẮC BÁO HIỆU SAI TÊN MIỀN (SHAKE ANIMATION) */
+            @keyframes dzShake {
+                0%, 100% { transform: translateX(0); }
+                20%, 60% { transform: translateX(-8px); }
+                40%, 80% { transform: translateX(8px); }
+            }
+            .dz-input-shake {
+                animation: dzShake 0.4s ease-in-out !important;
+                border: 2px solid #ef4444 !important;
+                background-color: #fef2f2 !important;
+                color: #b91c1c !important;
+            }
         `;
 
         if (typeof GM_addStyle !== "undefined") {
@@ -385,19 +455,57 @@
         }
     }
 
-    // 3. Tải SDK QCaptcha
+    // 3. Tải SDK QCaptcha an toàn tuyệt đối
     function loadQCaptchaSdk() {
         return new Promise((resolve) => {
-            if (window.qcaptcha || window.hcaptcha) {
-                return resolve(window.qcaptcha || window.hcaptcha);
+            const getApi = () => pageWin.hcaptcha || pageWin.qcaptcha || window.hcaptcha || window.qcaptcha;
+            if (getApi()) {
+                return resolve(getApi());
             }
+
+            // Tìm script URL từ page hoặc dùng fallback chuẩn có render=explicit&compat=hcaptcha
+            let scriptUrl = pageWin.qCaptchaScriptUrl || DEFAULT_QCAPTCHA_SCRIPT;
+            if (!scriptUrl.includes("compat=hcaptcha")) {
+                const sep = scriptUrl.includes("?") ? "&" : "?";
+                scriptUrl += sep + "render=explicit&compat=hcaptcha";
+            }
+
             const s = document.createElement('script');
-            s.src = QCAPTCHA_SCRIPT;
+            s.src = scriptUrl;
             s.async = true;
-            s.onload = () => resolve(window.qcaptcha || window.hcaptcha);
-            s.onerror = () => resolve(null);
+            s.defer = true;
+            s.onload = () => {
+                setTimeout(() => {
+                    resolve(getApi());
+                }, 200);
+            };
+            s.onerror = () => {
+                // Fallback nếu sslip.io bị chặn
+                const s2 = document.createElement('script');
+                s2.src = "https://hcaptcha.com/1/api.js?render=explicit";
+                s2.async = true;
+                s2.onload = () => setTimeout(() => resolve(getApi()), 200);
+                s2.onerror = () => resolve(null);
+                document.head.appendChild(s2);
+            };
             document.head.appendChild(s);
+
+            // Timeout an toàn sau 5s nếu mạng treo
+            setTimeout(() => {
+                if (!getApi()) resolve(null);
+            }, 5000);
         });
+    }
+
+    function getQCaptchaSiteKey() {
+        const container = document.getElementById('qcaptcha-checkcode');
+        if (container && container.getAttribute('data-sitekey')) {
+            return container.getAttribute('data-sitekey');
+        }
+        if (pageWin.qCaptchaSiteKey) {
+            return pageWin.qCaptchaSiteKey;
+        }
+        return DEFAULT_QCAPTCHA_SITEKEY;
     }
 
     // 4. Trích xuất từ khóa nhiệm vụ
@@ -420,35 +528,85 @@
         return "Không có từ khóa";
     }
 
-    // 5. Trích xuất link ảnh hướng dẫn
+    // 5. Kiểm tra ảnh có phải là ảnh hướng dẫn chung / thanh search hay không
+    function isGenericIllustration(url) {
+        if (!url) return true;
+        const lower = url.toLowerCase();
+        return lower.includes('tim-kiem') ||
+               lower.includes('search') ||
+               lower.includes('laymabutton') ||
+               lower.includes('logo') ||
+               lower.includes('icon') ||
+               lower.includes('video') ||
+               lower.includes('close') ||
+               lower.includes('play') ||
+               lower.includes('avatar') ||
+               lower.endsWith('.svg');
+    }
+
+    // 6. Trích xuất link ảnh hướng dẫn THỰC SỰ (Bỏ qua thanh search hình Google)
     function extractTaskImage() {
-        const imgEl = document.querySelector('#hinh_nv[src], img.img-fluid[src*="api.layma.net/media/images/posts/"], .box-step-wrap img[src]');
-        if (imgEl && imgEl.src) {
-            return imgEl.src;
+        // A. Ưu tiên #hinh_nv nếu có src và không phải ảnh thanh search
+        const hinhNv = document.querySelector('#hinh_nv');
+        if (hinhNv) {
+            const src = hinhNv.currentSrc || hinhNv.src || hinhNv.getAttribute('data-src') || hinhNv.getAttribute('data-lazy-src') || '';
+            if (src && !isGenericIllustration(src)) return src;
+        }
+
+        // B. Tìm các ảnh trong thư mục posts/ hoặc Screenshot_
+        const postImgs = document.querySelectorAll('img[src*="/media/images/posts/"], img[src*="Screenshot_"], img[src*="sun"]');
+        for (const img of postImgs) {
+            const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+            if (src && !isGenericIllustration(src)) return src;
+        }
+
+        // C. Quét toàn bộ ảnh trong .box-step-wrap hoặc .box-form-wrap, bỏ qua các ảnh thanh search / logo
+        const allImgs = document.querySelectorAll('.box-step-wrap img, .box-form-wrap img, img.img-fluid');
+        for (const img of allImgs) {
+            const src = img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+            if (src && !isGenericIllustration(src)) {
+                return src;
+            }
         }
         return "";
     }
 
-    // 6. Nhận diện Link Quest từ Ảnh, DB hoặc DOM
+    // 7. Nhận diện Link Quest từ Ảnh, DB, Từ khóa hoặc DOM
     function detectQuestUrl() {
         const imgSrc = extractTaskImage();
+        const keyword = extractKeyword().toLowerCase().trim();
 
-        // Kiểm tra trong manual cache đã lưu
+        // A. Kiểm tra trong manual cache đã lưu
         const manualMap = getSavedManualMap();
         if (imgSrc && manualMap[imgSrc]) {
             return { url: manualMap[imgSrc], method: 'SAVED_CACHE', imgSrc: imgSrc };
         }
 
-        // Kiểm tra trong liveImageMap (47 ảnh)
+        // B. Kiểm tra trong liveImageMap (50+ ảnh)
         if (imgSrc) {
+            const cleanSrc = imgSrc.split('?')[0];
+            const filename = cleanSrc.substring(cleanSrc.lastIndexOf('/') + 1);
+
             for (const key in liveImageMap) {
-                if (imgSrc.includes(key) || key.includes(imgSrc)) {
+                const cleanKey = key.split('?')[0];
+                const keyFilename = cleanKey.substring(cleanKey.lastIndexOf('/') + 1);
+                if (cleanSrc.includes(cleanKey) || cleanKey.includes(cleanSrc) || (filename && keyFilename && filename === keyFilename)) {
                     return { url: liveImageMap[key], method: 'IMAGE_MAP', imgSrc: imgSrc };
                 }
             }
         }
 
-        // Tìm trong linkWeb hoặc các thẻ text
+        // C. TỰ ĐỘNG BỎ QUA BẰNG TỪ KHÓA (Persistent All-in-One auto-bypass)
+        if (keyword && keyword !== "không có từ khóa") {
+            for (const kwKey in KEYWORD_AUTO_MAP) {
+                if (keyword.includes(kwKey) || kwKey.includes(keyword)) {
+                    console.log(`[Duyzoz Engine] Tự động giải mã Quest qua Từ khóa (${keyword}) -> ${KEYWORD_AUTO_MAP[kwKey]}`);
+                    return { url: KEYWORD_AUTO_MAP[kwKey], method: 'KEYWORD_AUTO_MAP', imgSrc: imgSrc };
+                }
+            }
+        }
+
+        // D. Tìm trong linkWeb hoặc các thẻ text
         const linkEl = document.querySelector('#linkWeb, #TK1, #TK2');
         if (linkEl && linkEl.innerText) {
             let txt = linkEl.innerText.trim();
@@ -459,7 +617,7 @@
         return { url: null, method: 'UNRESOLVED', imgSrc: imgSrc };
     }
 
-    // 7. Kiểm tra Blacklist
+    // 8. Kiểm tra Blacklist
     function isUrlBlacklisted(url) {
         if (!url) return false;
         try {
@@ -475,18 +633,56 @@
         return false;
     }
 
-    // 8. Nhấp đổi nhiệm vụ
+    // 9. Nhấp đổi nhiệm vụ & Tự động Xác nhận Modal (Khắc phục triệt để vòng lặp treo modal)
     function triggerChangeTask(reason) {
         console.warn("[Duyzoz Engine] Thực hiện đổi nhiệm vụ vì:", reason);
-        const btn = document.querySelector('#btn-baoloi, button.btn-danger, button[onclick*="baoloi"]');
+
+        // Gọi trực tiếp API native nếu có
+        if (typeof pageWin.executeChangeMission === 'function') {
+            try {
+                pageWin.executeChangeMission();
+                return;
+            } catch(e) {}
+        }
+
+        // Nhấp nút đổi nhiệm vụ gốc
+        const btn = document.querySelector('#btn-baoloi, a#btn-baoloi, button.btn-danger, button[onclick*="baoloi"]');
         if (btn) {
             btn.click();
-        } else {
-            window.location.reload();
+        }
+
+        // Tự động nhấn "Xác nhận" trên Modal Đổi Nhiệm Vụ ngay lập tức
+        autoConfirmTaskModal();
+    }
+
+    function autoConfirmTaskModal() {
+        const clickConfirm = () => {
+            const confirmBtn = document.querySelector('#btnXacNhanDoiNhiemVu, #modalNhiemVu button.btn-primary, .modal button.btn-warning, button[onclick*="doiNhiemVu"]');
+            if (confirmBtn) {
+                console.log("[Duyzoz Engine] Đã tự động nhấn Xác nhận đổi nhiệm vụ!");
+                confirmBtn.click();
+                return true;
+            }
+            return false;
+        };
+
+        if (!clickConfirm()) {
+            setTimeout(clickConfirm, 100);
+            setTimeout(clickConfirm, 300);
+            setTimeout(clickConfirm, 600);
+            setTimeout(clickConfirm, 1200);
         }
     }
 
-    // 9. Khởi tạo Giao diện Đè trực tiếp
+    // Giám sát nền: Nếu modal đổi nhiệm vụ xuất hiện bất cứ lúc nào, tự xác nhận
+    setInterval(() => {
+        const modal = document.getElementById('modalNhiemVu');
+        if (modal && modal.style.display !== 'none' && modal.style.display !== '') {
+            autoConfirmTaskModal();
+        }
+    }, 400);
+
+    // 10. Khởi tạo Giao diện Đè trực tiếp
     function initLayMaNativeUI() {
         const isLayma = window.location.hostname.includes('layma') || !!document.querySelector('.box-step-wrap, #hinh_nv, #qcaptcha-checkcode');
         if (!isLayma) return;
@@ -599,7 +795,7 @@
         executeLaymaBypass();
     }
 
-    // 10. Thực thi toàn bộ chu trình Bypass LayMa
+    // 11. Thực thi toàn bộ chu trình Bypass LayMa
     function executeLaymaBypass() {
         const questInfoBox = document.getElementById('native-override-quest-info');
         const captchaBox = document.getElementById('native-override-captcha-box');
@@ -611,7 +807,7 @@
         const imgSrc = detected.imgSrc || extractTaskImage();
         const keyword = extractKeyword();
 
-        // TRƯỜNG HỢP 1: Không tìm thấy link nhiệm vụ tương ứng với ảnh
+        // TRƯỜNG HỢP 1: Không tìm thấy link nhiệm vụ tự động
         if (!detected || !detected.url) {
             console.warn("[Duyzoz Engine] Không tìm thấy link nhiệm vụ tương ứng với ảnh.");
 
@@ -619,12 +815,19 @@
             if (autoChangeOnError) {
                 captchaBox.style.display = 'block';
                 captchaBox.innerHTML = "<div style='color:#dc2626; font-weight:bold;'>Không nhận diện được ảnh! Đang tự động đổi nhiệm vụ...</div>";
-                setTimeout(() => triggerChangeTask("Không tìm thấy ảnh trong DB"), 1500);
+                setTimeout(() => triggerChangeTask("Không tìm thấy ảnh trong DB"), 1200);
                 return;
             }
 
-            // Nếu tắt "Đổi NV khi lỗi" -> Hiển thị Giao diện Hình 2 chuẩn của base projectscript112247
-            captchaBox.style.display = 'none'; // Ẩn captcha box trong lúc nhập thủ công
+            // Nếu tắt "Đổi NV khi lỗi" -> Hiển thị Giao diện Hình 2 chuẩn 100% của base projectscript112247
+            captchaBox.style.display = 'none';
+
+            const knownDomains = getKnownDomains();
+            // Gợi ý các tên miền phổ biến
+            const suggestionPills = ["idelec.com.co", "sunwinkt.com", "sunwinmb.com", "caadda.co.in", "nasons.co.in"]
+                .map(d => `<button type="button" class="dz-suggest-domain" data-domain="${d}" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer; font-weight:600;">${d}</button>`)
+                .join(" ");
+
             questInfoBox.innerHTML = `
                 <div style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px 14px; border-radius:6px; margin-bottom:12px;">
                     <b>Không lấy được link Quest tự động!</b><br>
@@ -640,30 +843,84 @@
                 <input id="manual-quest-keyword" type="text" value="${keyword}" readonly autocomplete="off" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:12px; background:#f1f5f9; color:#64748b; cursor:not-allowed; font-size:13px;">
 
                 <label for="manual-quest-link" style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px; color:#334155;">Link Quest thủ công</label>
-                <input id="manual-quest-link" type="url" placeholder="https://..." autocomplete="off" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:12px; font-size:13px;">
+                <input id="manual-quest-link" type="text" placeholder="https://..." autocomplete="off" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:6px; font-size:13px; transition: border-color 0.2s;">
+                
+                <div id="manual-quest-error" style="display:none; color:#dc2626; font-size:12px; font-weight:bold; margin-bottom:8px;"></div>
 
-                <button type="button" id="btn-manual-quest" style="width:100%; font-weight:bold; background:#eab308; color:#ffffff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-size:14px;">Tiếp tục với link này</button>
+                <div style="margin-bottom:12px; font-size:12px; color:#64748b;">
+                    <span style="font-weight:600;">Gợi ý tên miền nhanh:</span>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
+                        ${suggestionPills}
+                    </div>
+                </div>
+
+                <button type="button" id="btn-manual-quest" style="width:100%; font-weight:bold; background:#eab308; color:#ffffff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-size:14px; box-shadow:0 2px 6px rgba(234,179,8,0.3);">Tiếp tục với link này</button>
                 <button type="button" id="btn-manual-change-quest" style="width:100%; margin-top:10px; font-weight:bold; background:#dc2626; color:#ffffff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-size:14px;">Đổi nhiệm vụ</button>
             `;
 
-            // Xử lý nút Tiếp tục với link này
+            // Gắn sự kiện click suggestion pills
+            document.querySelectorAll('.dz-suggest-domain').forEach(btn => {
+                btn.onclick = () => {
+                    const domain = btn.getAttribute('data-domain');
+                    const linkInput = document.getElementById('manual-quest-link');
+                    linkInput.value = "https://" + domain;
+                    linkInput.classList.remove('dz-input-shake');
+                    document.getElementById('manual-quest-error').style.display = 'none';
+                };
+            });
+
+            // Xử lý nút Tiếp tục với link này & HIỆU ỨNG LẮC BÁO SAI TÊN MIỀN
             document.getElementById('btn-manual-quest').onclick = () => {
-                let customUrl = document.getElementById('manual-quest-link').value.trim();
+                const linkInput = document.getElementById('manual-quest-link');
+                const errBox = document.getElementById('manual-quest-error');
+                let customUrl = linkInput.value.trim();
+
                 if (!customUrl) {
-                    alert("Vui lòng nhập Link Quest thủ công để tiếp tục!");
+                    linkInput.classList.remove('dz-input-shake');
+                    void linkInput.offsetWidth; // Force reflow
+                    linkInput.classList.add('dz-input-shake');
+                    errBox.innerText = "⚠️ Vui lòng nhập Link Quest thủ công để tiếp tục!";
+                    errBox.style.display = 'block';
                     return;
                 }
+
                 if (!customUrl.startsWith('http://') && !customUrl.startsWith('https://')) {
                     customUrl = 'https://' + customUrl;
+                    linkInput.value = customUrl;
                 }
 
-                // Nếu bật lưu link đã nhập
+                // Trích xuất hostname để đối chiếu database
+                let enteredHost = "";
+                try {
+                    enteredHost = new URL(customUrl).hostname.replace(/^www\./, '').toLowerCase();
+                } catch(e) {
+                    enteredHost = customUrl.replace(/^https?:\/\//i, '').split('/')[0].replace(/^www\./, '').toLowerCase();
+                }
+
+                // KIỂM TRA TÊN MIỀN TRONG DATABASE: NẾU SAI -> LẮC BÁO HIỆU
+                const isDomainInBase = knownDomains.some(kd => enteredHost.includes(kd) || kd.includes(enteredHost));
+                if (!isDomainInBase) {
+                    console.warn("[Duyzoz Engine] Tên miền không có trong database:", enteredHost);
+                    linkInput.classList.remove('dz-input-shake');
+                    void linkInput.offsetWidth; // Trigger reflow animation
+                    linkInput.classList.add('dz-input-shake');
+                    errBox.innerHTML = `⚠️ Tên miền <b>${enteredHost}</b> không có trong Database!<br><span style="font-weight:normal; font-size:11px;">Vui lòng nhìn kỹ tên miền trong ảnh hướng dẫn hoặc chọn gợi ý bên dưới. (Nếu chắc chắn đúng, hãy bấm lại Tiếp tục).</span>`;
+                    errBox.style.display = 'block';
+
+                    // Cho phép người dùng bấm lại lần 2 nếu họ chắc chắn
+                    if (!linkInput.dataset.warnedOnce) {
+                        linkInput.dataset.warnedOnce = "true";
+                        return;
+                    }
+                }
+
+                // Nếu hợp lệ hoặc người dùng xác nhận
                 if (getSetting('auto_save', false) && imgSrc) {
                     saveManualMap(imgSrc, customUrl);
                     console.log("[Duyzoz Engine] Đã lưu link nhiệm vụ vào cache:", imgSrc, "->", customUrl);
                 }
 
-                // Chạy bypass với link thủ công
+                // Chạy luồng bypass với link đã chọn
                 startCampaignFlow(customUrl);
             };
 
@@ -683,7 +940,7 @@
             if (autoChangeBlacklist) {
                 captchaBox.style.display = 'block';
                 captchaBox.innerHTML = `<div style='color:#dc2626; font-weight:bold;'>Phát hiện nhiệm vụ Blacklist (${questUrl})! Đang tự động đổi...</div>`;
-                setTimeout(() => triggerChangeTask("Nhiệm vụ Blacklist"), 1500);
+                setTimeout(() => triggerChangeTask("Nhiệm vụ Blacklist"), 1200);
                 return;
             }
         }
@@ -692,7 +949,7 @@
         startCampaignFlow(questUrl);
     }
 
-    // 11. Luồng Campaign & Kết nối API ngầm
+    // 12. Luồng Campaign & Kết nối API ngầm
     function startCampaignFlow(questUrl) {
         const questInfoBox = document.getElementById('native-override-quest-info');
         const captchaBox = document.getElementById('native-override-captcha-box');
@@ -755,12 +1012,10 @@
                             onload: (cRes) => {
                                 let trafficId = "";
                                 let serverWait = parseInt(document.getElementById('input-wait-time')?.value) || 85;
-                                let useQCaptcha = true;
                                 try {
                                     const cj = JSON.parse(cRes.responseText);
                                     trafficId = cj.id;
                                     if (cj.requiredWaitSeconds) serverWait = Math.max(serverWait, cj.requiredWaitSeconds);
-                                    if (cj.useQCaptcha !== undefined) useQCaptcha = cj.useQCaptcha;
                                 } catch (e) {}
 
                                 // BẮT ĐẦU ĐẾM NGƯỢC THẬT SỰ
@@ -799,7 +1054,7 @@
         document.getElementById('btn-native-change').onclick = () => triggerChangeTask("Người dùng bấm Đổi NV");
     }
 
-    // 12. Đếm ngược thật
+    // 13. Đếm ngược thật
     function runCountdown(totalSeconds, keyToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
@@ -833,7 +1088,7 @@
         }, 1000);
     }
 
-    // 13. Bước 1: Render QCaptcha lấy mã
+    // 14. Bước 1: Render QCaptcha lấy mã
     async function step1LoadQCaptcha(keyToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
@@ -848,22 +1103,43 @@
         `;
 
         const api = await loadQCaptchaSdk();
+        const sitekey = getQCaptchaSiteKey();
+
         if (api && typeof api.render === 'function') {
             const container = document.getElementById('qcaptcha-native-container');
             container.innerHTML = "";
-            api.render(container, {
-                sitekey: QCAPTCHA_SITEKEY,
-                callback: function (qCaptchaToken) {
-                    console.log("[Duyzoz Engine] Đã giải quyết QCaptcha Bước 1:", qCaptchaToken);
-                    requestGetCode(qCaptchaToken, sessionToken, trafficId, questUrl);
-                }
-            });
+            try {
+                api.render(container, {
+                    sitekey: sitekey,
+                    callback: function (qCaptchaToken) {
+                        console.log("[Duyzoz Engine] Đã giải quyết QCaptcha Bước 1:", qCaptchaToken);
+                        requestGetCode(qCaptchaToken, sessionToken, trafficId, questUrl);
+                    }
+                });
+            } catch(e) {
+                console.error("[Duyzoz Engine] Lỗi render QCaptcha:", e);
+                showCaptchaErrorUI(keyToken, sessionToken, trafficId, questUrl);
+            }
         } else {
-            captchaBox.innerHTML = "<div style='color:#dc2626;'>Không thể tải thư viện QCaptcha. Vui lòng tải lại trang.</div>";
+            showCaptchaErrorUI(keyToken, sessionToken, trafficId, questUrl);
         }
     }
 
-    // 14. Gửi QCaptcha Token lấy Mã
+    function showCaptchaErrorUI(keyToken, sessionToken, trafficId, questUrl) {
+        const captchaBox = document.getElementById('native-override-captcha-box');
+        if (!captchaBox) return;
+        captchaBox.innerHTML = `
+            <div style="color:#dc2626; font-weight:bold; margin-bottom:10px;">Không thể tải thư viện QCaptcha do mạng hoặc máy chủ.</div>
+            <div style="display:flex; gap:10px;">
+                <button type="button" id="btn-retry-qcaptcha" style="flex:1; padding:8px; background:#f59e0b; color:white; font-weight:bold; border:none; border-radius:6px; cursor:pointer;">Thử tải lại QCaptcha</button>
+                <button type="button" id="btn-reload-page" style="flex:1; padding:8px; background:#ef4444; color:white; font-weight:bold; border:none; border-radius:6px; cursor:pointer;">Tải lại trang</button>
+            </div>
+        `;
+        document.getElementById('btn-retry-qcaptcha').onclick = () => step1LoadQCaptcha(keyToken, sessionToken, trafficId, questUrl);
+        document.getElementById('btn-reload-page').onclick = () => window.location.reload();
+    }
+
+    // 15. Gửi QCaptcha Token lấy Mã
     function requestGetCode(qCaptchaToken, sessionToken, trafficId, questUrl) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (captchaBox) {
@@ -927,7 +1203,7 @@
         });
     }
 
-    // 15. Bước 2: Hiển thị Mã & QCaptcha Nộp mã
+    // 16. Bước 2: Hiển thị Mã & QCaptcha Nộp mã
     async function step2SubmitCode(code) {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
@@ -948,11 +1224,13 @@
         `;
 
         const api = await loadQCaptchaSdk();
+        const sitekey = getQCaptchaSiteKey();
+
         if (api && typeof api.render === 'function') {
             const container = document.getElementById('qcaptcha-native-container-2');
             container.innerHTML = "";
             api.render(container, {
-                sitekey: QCAPTCHA_SITEKEY,
+                sitekey: sitekey,
                 callback: function (captchaToken2) {
                     console.log("[Duyzoz Engine] QCaptcha Bước 2 hoàn tất! Đang nộp mã...");
 
@@ -968,7 +1246,7 @@
         }
     }
 
-    // 16. Bước 3: Hoàn tất Bypass & Hiển thị Link đích
+    // 17. Bước 3: Hoàn tất Bypass & Hiển thị Link đích
     function showFinalSuccessUI() {
         const captchaBox = document.getElementById('native-override-captcha-box');
         if (!captchaBox) return;
@@ -1002,7 +1280,7 @@
         }
     }
 
-    // 17. Khởi động Engine trên LayMa
+    // 18. Khởi động Engine trên LayMa
     syncCloudConfig();
 
     const laymaInitInterval = setInterval(() => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.9.0
+// @version      4.1.0
 // @description  Bypass LayMa.net 100% chuẩn quy trình base projectscript112247 (Lắng nghe xác thực QCaptcha đa tầng, tự động lấy mã, auto submit LayMa & chuyển hướng link đích) & Link4Sub True Bypass.
 // @author       Duyzoz
 // @match        *://layma.net/*

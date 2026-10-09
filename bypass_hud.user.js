@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.9.1
+// @version      3.9.2
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1166,48 +1166,44 @@
     function extractRealCode(text) {
         if (!text) return "";
 
+        const BAD = new Set([
+            "https", "http", "www", "html", "tools", "token", "chrome",
+            "window", "script", "error", "false", "true", "null", "data",
+            "code", "layma", "traffic", "session", "captcha", "success",
+            "message", "result", "status", "origin", "referer"
+        ]);
+
+        const isCode = (s) => {
+            if (!s) return false;
+            s = String(s).trim();
+            if (!/^[A-Za-z0-9]{4,10}$/.test(s)) return false;
+            if (BAD.has(s.toLowerCase())) return false;
+            if (/^https?$/i.test(s)) return false;
+            if (!/[A-Za-z]/.test(s) || !/[0-9]/.test(s)) return false;
+            return true;
+        };
+
         try {
             const json = JSON.parse(text);
-            const candidates = [
-                json.code,
-                json.html,
-                json.data,
+            const bag = [
+                json.code, json.html, json.data,
                 (json.data && json.data.code),
                 (json.data && json.data.html),
-                json.result,
-                json.message,
-                json.Code,
-                json.Html
+                json.result, json.message
             ];
-
-            for (let c of candidates) {
-                if (!c) continue;
+            for (const c of bag) {
+                if (c == null) continue;
                 const str = String(c).trim();
-
-                if (str.startsWith('http') || str.includes('://')) continue;
-
-                if (/^[A-Za-z0-9]{4,10}$/.test(str) && !str.toLowerCase().includes('http') && str.toLowerCase() !== 'https') {
-                    return str;
-                }
-
-                const m = str.match(/\b[A-Za-z0-9]{5,9}\b/);
-                if (m && !m[0].toLowerCase().startsWith('http') && m[0].toLowerCase() !== 'https') {
-                    return m[0];
-                }
+                if (isCode(str)) return str;
+                const m = str.match(/\b[A-Za-z0-9]{4,10}\b/g) || [];
+                const hit = m.find(isCode);
+                if (hit) return hit;
             }
         } catch (e) {}
 
-        const blacklist = ['https', 'http', 'www', 'layma', 'traffic', 'session', 'captcha', 'token', 'chrome', 'windows', 'false', 'true', 'null', 'undefined'];
-        const matches = text.match(/\b[A-Za-z0-9]{5,9}\b/g) || [];
-
-        for (const m of matches) {
-            const lower = m.toLowerCase();
-            if (blacklist.some(b => lower.includes(b))) continue;
-            if (/^\d+$/.test(m)) continue;
-            return m;
-        }
-
-        return "";
+        const all = text.match(/\b[A-Za-z0-9]{4,10}\b/g) || [];
+        const hit = all.find(isCode);
+        return hit || "";
     }
 
     function processCaptchaSolvedAndSubmit(qCaptchaToken, sessionToken, trafficId, questUrl) {
@@ -1297,38 +1293,17 @@
                 const codeReceived = extractRealCode(res.responseText);
 
                 if (codeReceived) {
-                    console.log("[Duyzoz Engine] Đã trích xuất mã thành công:", codeReceived);
+                    console.log("[Duyzoz Engine] Đã trích xuất mã thật thành công:", codeReceived);
                     handleReceivedCode(codeReceived);
                 } else {
-                    const captchaBox = document.getElementById('native-override-captcha-box');
-                    if (captchaBox) {
-                        captchaBox.style.display = 'block';
-                        captchaBox.innerHTML = `
-                            <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:12px; max-height:320px; overflow:auto; text-align:left; white-space:pre-wrap; word-break:break-all;">
-                                <div style="color:#f43f5e; font-weight:bold; margin-bottom:8px;">⚠️ CHƯA LẤY ĐƯỢC MÃ THẬT (status: ${res.status})</div>
-                                ${(res.responseText || "").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-                            </div>
-                            <div style="margin-top:12px; display:flex; gap:8px;">
-                                <button type="button" id="dz-copy-raw" style="flex:1; padding:9px; background:#3b82f6; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Copy Response</button>
-                                <button type="button" id="dz-retry-raw" style="flex:1; padding:9px; background:#f59e0b; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Thử lại</button>
-                            </div>
-                        `;
-
-                        const copyBtn = document.getElementById('dz-copy-raw');
-                        if (copyBtn) {
-                            copyBtn.onclick = () => {
-                                try {
-                                    GM_setClipboard(res.responseText);
-                                    alert('Đã copy response vào clipboard!');
-                                } catch(e) {
-                                    prompt('Copy thủ công:', res.responseText);
-                                }
-                            };
-                        }
-                        const retryBtn = document.getElementById('dz-retry-raw');
-                        if (retryBtn) {
-                            retryBtn.onclick = () => executeLaymaBypass();
-                        }
+                    const box = document.getElementById("native-override-captcha-box");
+                    if (box) {
+                        box.style.display = "block";
+                        box.innerHTML =
+                            "<pre style='white-space:pre-wrap;word-break:break-all;font-size:12px;text-align:left;max-height:280px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;'>" +
+                            "status: " + res.status + "\n\n" +
+                            String(res.responseText).replace(/</g, "&lt;") +
+                            "</pre>";
                     }
                 }
             },

@@ -7,7 +7,7 @@
 ![Tampermonkey](https://img.shields.io/badge/Tampermonkey-v4.0+-black.svg)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success.svg)
-![Version](https://img.shields.io/badge/Version-3.3.0-orange.svg)
+![Version](https://img.shields.io/badge/Version-3.4.0-orange.svg)
 
 **Công cụ bypass link rút gọn & nhiệm vụ traffic tự động đa nền tảng**  
 *Phiên bản nâng cấp toàn diện bằng JavaScript & Userscript HUD Glassmorphism bởi **Duyzoz***

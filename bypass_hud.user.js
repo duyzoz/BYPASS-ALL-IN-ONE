@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.8.2
+// @version      3.9.0
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -1222,9 +1222,10 @@
             url: "https://api.layma.net/api/traffic/getcode",
             headers: {
                 'Content-Type': 'application/json',
-                'X-Traffic-Session': sessionToken,
-                'Origin': questUrl,
-                'Referer': questUrl
+                'X-Traffic-Session': sessionToken || '',
+                'Origin': 'https://layma.net',
+                'Referer': 'https://layma.net/',
+                'Accept': 'application/json, text/plain, */*'
             },
             data: JSON.stringify({
                 uuid: String(Math.floor(100000 + Math.random() * 900000)),
@@ -1243,18 +1244,75 @@
                 qCaptchaToken: qCaptchaToken
             }),
             onload: (res) => {
+                console.log("[Duyzoz] getcode status:", res.status);
+                console.log("[Duyzoz] getcode body:", res.responseText);
+
+                const captchaBox = document.getElementById('native-override-captcha-box');
+                if (captchaBox) {
+                    captchaBox.style.display = 'block';
+                    captchaBox.innerHTML = `
+                        <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:12px; max-height:320px; overflow:auto; text-align:left; white-space:pre-wrap; word-break:break-all;">
+                            <div style="color:#38bdf8; font-weight:bold; margin-bottom:8px;">📦 GETCODE RESPONSE (status: ${res.status})</div>
+                            ${(res.responseText || "").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                        </div>
+                        <div style="margin-top:12px; display:flex; gap:8px;">
+                            <button type="button" id="dz-copy-raw" style="flex:1; padding:9px; background:#3b82f6; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Copy Response</button>
+                            <button type="button" id="dz-retry-raw" style="flex:1; padding:9px; background:#f59e0b; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Thử lại</button>
+                        </div>
+                    `;
+
+                    const copyBtn = document.getElementById('dz-copy-raw');
+                    if (copyBtn) {
+                        copyBtn.onclick = () => {
+                            try {
+                                GM_setClipboard(res.responseText);
+                                alert('Đã copy response vào clipboard!');
+                            } catch(e) {
+                                prompt('Copy thủ công:', res.responseText);
+                            }
+                        };
+                    }
+                    const retryBtn = document.getElementById('dz-retry-raw');
+                    if (retryBtn) {
+                        retryBtn.onclick = () => executeLaymaBypass();
+                    }
+                }
+
                 let codeReceived = "";
                 try {
                     const json = JSON.parse(res.responseText);
-                    const raw = json.html || json.code || json.data || "";
-                    const m = raw.match(/[a-zA-Z0-9]{4,10}/);
-                    if (m) codeReceived = m[0];
-                    else if (raw) codeReceived = raw.trim();
-                } catch (e) {}
+                    const candidates = [
+                        json.code,
+                        json.html,
+                        json.data,
+                        (json.data && json.data.code),
+                        (json.data && json.data.html),
+                        json.result,
+                        json.message,
+                        json.Code,
+                        json.Html
+                    ];
+                    for (const c of candidates) {
+                        if (!c) continue;
+                        const str = typeof c === 'string' ? c : JSON.stringify(c);
+                        const m = str.match(/[A-Za-z0-9]{4,12}/);
+                        if (m) { codeReceived = m[0]; break; }
+                        if (/^[A-Za-z0-9]{4,12}$/.test(str.trim())) {
+                            codeReceived = str.trim();
+                            break;
+                        }
+                    }
+                    if (!codeReceived) {
+                        const m2 = res.responseText.match(/[A-Za-z0-9]{5,10}/g);
+                        if (m2) codeReceived = m2.find(x => x.length <= 10) || m2[0];
+                    }
+                } catch (e) {
+                    console.warn("[Duyzoz] Parse getcode lỗi:", e);
+                    const m3 = res.responseText.match(/[A-Za-z0-9]{5,10}/);
+                    if (m3) codeReceived = m3[0];
+                }
 
-                if (!codeReceived) {
-                    showFailAndRetry("❌ Không thể lấy mã từ máy chủ LayMa. Vui lòng thử lại hoặc đổi nhiệm vụ!");
-                } else {
+                if (codeReceived) {
                     handleReceivedCode(codeReceived);
                 }
             },

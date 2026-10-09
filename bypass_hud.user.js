@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bypass Link All-in-One HUD (Made by Duyzoz)
 // @namespace    https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-// @version      3.8.1
+// @version      3.8.2
 // @description  Bypass LayMa.net & Link4Sub True Bypass
 // @author       Duyzoz
 // @match        *://layma.net/*
@@ -908,21 +908,26 @@
                             } catch (e) {}
 
                             if (!trafficId) {
-                                console.warn("[Duyzoz Engine] Campaign ID null/invalid, triggering fast auto-change!");
-                                showFailAndRetry("❌ Chiến dịch này đã hết hạn. Đang tự động chuyển sang nhiệm vụ mới...");
-                                setTimeout(() => triggerChangeTask("Chiến dịch hết hạn từ server LayMa"), 800);
-                                return;
+                                console.warn("[Duyzoz Engine] Server LayMa báo hết chiến dịch (400), tự động dùng đếm ngược dự phòng 85s!");
+                                trafficId = keyToken;
+                                if (!serverWait || serverWait < 10) serverWait = 85;
                             }
 
                             runCountdown(serverWait, keyToken, sessionToken, trafficId, questUrl);
                         },
                         onerror: () => {
-                            showFailAndRetry("❌ Khởi tạo chiến dịch thất bại trên máy chủ LayMa. Vui lòng đổi nhiệm vụ!");
+                            console.warn("[Duyzoz Engine] Lỗi kết nối Campain, tự động dùng đếm ngược dự phòng 85s.");
+                            let waitInput = document.getElementById('input-wait-time');
+                            let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
+                            runCountdown(serverWait, keyToken, sessionToken, keyToken, questUrl);
                         }
                     });
                 },
                 onerror: () => {
-                    showFailAndRetry("Không thể kết nối Traffic Session!");
+                    console.warn("[Duyzoz Engine] Lỗi kết nối Session, tự động dùng đếm ngược dự phòng 85s.");
+                    let waitInput = document.getElementById('input-wait-time');
+                    let serverWait = (waitInput && waitInput.value) ? parseInt(waitInput.value) : 85;
+                    runCountdown(serverWait, keyToken, "", keyToken, questUrl);
                 }
             });
         }
@@ -983,10 +988,6 @@
         `;
         document.getElementById('btn-native-retry').onclick = () => executeLaymaBypass();
         document.getElementById('btn-native-change').onclick = () => triggerChangeTask("Người dùng bấm Đổi NV");
-
-        if (getSetting('auto_change', true)) {
-            setTimeout(() => triggerChangeTask("Tự động đổi NV khi lỗi chiến dịch"), 1000);
-        }
     }
 
     function runCountdown(totalSeconds, keyToken, sessionToken, trafficId, questUrl) {

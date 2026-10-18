@@ -1,170 +1,91 @@
-# 🚀 BYPASS ALL-IN-ONE TOOL (JavaScript & Tampermonkey Edition)
+# 🚀 GTRAFFIC BYPASS ALL-IN-ONE (DUYZOZ EDITION)
 
 <div align="center">
 
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow.svg)
-![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)
 ![Tampermonkey](https://img.shields.io/badge/Tampermonkey-v4.0+-black.svg)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success.svg)
-![Version](https://img.shields.io/badge/Version-3.5.0-orange.svg)
+![Version](https://img.shields.io/badge/Version-2.1.0-cyan.svg)
 
-**Công cụ bypass link rút gọn & nhiệm vụ traffic tự động đa nền tảng**  
-*Phiên bản nâng cấp toàn diện bằng JavaScript & Userscript HUD Glassmorphism bởi **Duyzoz***
+**Công cụ bypass tự động nhiệm vụ GTraffic chuyên dụng & thông minh nhất**  
+*Tích hợp AI OCR nhận diện ảnh, Fake Google Referrer, Chống đóng băng tab ngầm & Tự động lấy mã*  
+*Phát triển bởi **Duyzoz***
 
-[📖 Hướng dẫn sử dụng](#-hướng-dẫn-sử-dụng) • [⚡ Cài đặt](#-cài-đặt-nhanh) • [🎨 Giao diện HUD](#-tính-năng-tampermonkey-hud) • [🤝 Đóng góp](#-đóng-góp)
-
-</div>
-
----
-
-## 📋 Mục lục
-
-- [🌟 Tính năng nổi bật](#-tính-năng-nổi-bật)
-- [🎨 Tính năng Tampermonkey HUD](#-tính-năng-tampermonkey-hud)
-- [⚡ Cài đặt nhanh](#-cài-đặt-nhanh)
-- [🎯 Hướng dẫn sử dụng](#-hướng-dẫn-sử-dụng)
-  - [1. Chạy CLI bằng JavaScript (Node.js)](#1-chạy-cli-bằng-javascript-nodejs)
-  - [2. Cài đặt Userscript cho Trình duyệt](#2-cài-đặt-userscript-cho-trình-duyệt)
-- [🔧 Các nền tảng được hỗ trợ](#-các-nền-tảng-được-hỗ-trợ)
-- [🚀 Cách tự động Push lên GitHub](#-cách-tự-động-push-lên-github)
-- [📄 Giấy phép](#-giấy-phép)
-- [⭐ Star History](#-star-history)
-
----
-
-## 🌟 Tính năng nổi bật
-
-### ✨ **Đa dạng phương thức hoạt động**
-1. **Node.js CLI (`bypass_tool.js`)**: Chạy trực tiếp từ dòng lệnh máy tính, giải mã nhanh chóng không cần mở trình duyệt.
-2. **In-Browser HUD Userscript (`bypass_hud.user.js`)**: Tiêm giao diện Glassmorphism che toàn bộ trang rút gọn, giữ phiên ngầm an toàn 60–70s, tự động lấy và điền mã.
-
-### 🛡️ **Cải tiến trong phiên bản v2.0 của Duyzoz**
-- 🚀 **Viết lại 100% bằng JavaScript**: Tối ưu hóa hiệu năng, tương thích hoàn toàn với hệ sinh thái Node.js và Browser.
-- 🎨 **Giao diện HUD Cyber/Glassmorphism**: Đè mờ trang web gốc, ẩn mọi quảng cáo độc hại và pop-up rác.
-- ⏱️ **Safe Countdown Controller**: Giữ thời gian chờ 60–70s chuẩn xác giúp tránh bị hệ thống backend phát hiện gian lận hoặc chặn IP.
-- 🔓 **Giải mã động & XOR Native**: Tự động giải mã chuỗi Base64 và thuật toán XOR chuỗi trực tiếp.
-- 📋 **Tự động sao chép & Auto-fill**: Tự động đưa mã vào Clipboard và submit form khi hoàn thành.
-
----
-
-## 🎨 Tính năng Tampermonkey HUD
-
-Khi cài đặt file `bypass_hud.user.js` vào tiện ích Tampermonkey hoặc Violentmonkey:
-- **Không cần chuyển sang web khác**: Script sử dụng `GM_xmlhttpRequest` để kích hoạt nhiệm vụ ngầm ở chế độ background.
-- **Tiến trình trực quan**: Hiển thị thanh tiến trình đếm ngược kèm log chi tiết từng bước.
-- **Tự động điền biểu mẫu**: Tự tìm ô nhập mã trên trang rút gọn và tự động bấm nút tiếp tục.
-
----
-
-## ⚡ Cài đặt nhanh
-
-### Yêu cầu
-- Đối với CLI: **Node.js 18+**
-- Đối với Trình duyệt: Tiện ích **Tampermonkey** hoặc **Violentmonkey** trên Chrome/Firefox/Edge.
-
-### 1. Tải Repository
-```bash
-git clone https://github.com/duyzoz/BYPASS-ALL-IN-ONE.git
-cd BYPASS-ALL-IN-ONE
-```
-
----
-
-## 🎯 Hướng dẫn sử dụng
-
-### 1. Chạy CLI bằng JavaScript (Node.js)
-
-Khởi động công cụ:
-```bash
-node bypass_tool.js
-```
-Hoặc:
-```bash
-npm start
-```
-
-**Menu điều khiển:**
-```
-============================================================
-       BYPASS SHORT LINK ALL-IN-ONE (JS EDITION)
-       Tác giả: Duyzoz
-       Repo: https://github.com/duyzoz/BYPASS-ALL-IN-ONE
-============================================================
-
-Các chế độ hỗ trợ:
-  [1] YeuMoney  - Bypass nhiệm vụ YeuMoney / Traffic-User
-  [2] Link4M    - Bypass link traffic Link4M (What-on)
-  [3] FunLink   - Bypass link FunLink.io
-  [4] LinkTot   - Bypass link LinkTot.net (XOR Decrypt)
-  [5] Link4Sub  - Bypass link Link4Sub.com (Instant)
-  [6] LaymaNet  - Bypass link LayMa.net
-  [0] Thoát
-============================================================
-```
-
-### 2. Cài đặt Userscript cho Trình duyệt
-Bạn có thể cài đặt trực tiếp vào Tampermonkey qua URL:
-👉 **[Cài đặt Bypass HUD UserScript](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js)**
-
-Hoặc cài thủ công:
-1. Mở tiện ích mở rộng [Tampermonkey](https://www.tampermonkey.net/) trên trình duyệt.
-2. Chọn **Tiện ích $\to$ Thêm script mới (Add a new script)** hoặc **Cài đặt từ URL (Install from URL)**.
-3. Dán đường link:
-   ```
-   https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/bypass_hud.user.js
-   ```
-4. Bấm **Install** (Cài đặt).
-5. Khi bạn truy cập vào các trang LayMa.net hoặc Link4Sub, script sẽ tự động kích hoạt giao diện **Made by Duyzoz ✦** đè trực tiếp sạch sẽ (không làm mờ trang web).
-
----
-
-### 🔥 Tính năng đặc sắc V3.2.0 (Duyzoz Edition):
-- 💎 **Đè trực tiếp lên trang (Clean In-Page DOM)**: Loại bỏ hoàn toàn lớp mờ toàn màn hình gây khó chịu. Toàn bộ nội dung rác cũ của Layma được xóa/ẩn sạch sẽ, nhường chỗ cho giao diện hiện đại với hiệu ứng Shimmer gradient độc quyền.
-- 🎯 **Nhận diện nhiệm vụ qua ảnh thông minh (Image-to-Quest AI Mapping)**: Nhận diện hơn 47+ ảnh nhiệm vụ Layma, tự động chuyển đổi sang URL đích.
-- 🔁 **Tự động đổi nhiệm vụ lỗi & Blacklist**: Tự động lọc các trang web lỗi hoặc blacklist (`codecubicle`, `aligninterio`), tự động click đổi nhiệm vụ cho tới khi tìm được link bypass ngon.
-- 🛡️ **Chuẩn quy trình QCaptcha 2 bước**:
-  - **Bước 1**: Đếm ngược thật theo phiên backend $\to$ Hiện QCaptcha giải mã $\to$ Tự động gửi API nhận mã code.
-  - **Bước 2**: Tự động điền mã $\to$ Xác thực QCaptcha nộp mã $\to$ Click nút hoàn tất và hiển thị link đích.
-- ⚡ **Link4Sub True Instant Bypass**: Tự động đọc payload Base64 và chuyển hướng ngay lập tức mà không cần click sub/like.
-
-## 🔧 Các nền tảng được hỗ trợ
-
-| Nền tảng | Phương thức xử lý | Thời gian chờ | Tự động hóa |
-| :--- | :--- | :--- | :--- |
-| **Link4Sub** | Giải mã Base64 + URL unquote trực tiếp | **0 giây** | ⚡ Tức thì |
-| **LinkTot** | Ping ngầm + Giải mã thuật toán XOR (`1ThDrStTr`) | 80 giây | 🔄 Tự động |
-| **FunLink** | Khởi tạo phiên ngầm + Giả lập device fingerprint | 60 giây | 🔄 Tự động |
-| **YeuMoney** | Gọi API traffic-user với mã xác thực | Nhanh chóng | 🔄 Tự động |
-| **Link4M** | Đọc session từ widget What-on JS | 90 giây | 🔄 Tự động |
-| **LaymaNet** | Lấy campaign token và trích xuất HTML code | Nhanh chóng | 🔄 Tự động |
-
----
-
-## 🚀 Cách tự động Push lên GitHub
-
-Dự án tích hợp sẵn công cụ đẩy mã nguồn tự động thông qua GitHub REST API (không yêu cầu cài đặt phần mềm Git):
-
-```bash
-python push_to_github.py
-```
-> Nhập GitHub Personal Access Token (PAT) có quyền `repo` khi được hỏi để đồng bộ tất cả mã nguồn lên repo [duyzoz/BYPASS-ALL-IN-ONE](https://github.com/duyzoz/BYPASS-ALL-IN-ONE).
-
----
-
-## 📄 Giấy phép
-
-Phát hành dưới giấy phép [MIT License](LICENSE).  
-Bản quyền thuộc về **Duyzoz** (2024–2026).
-
----
-
-## ⭐ Star History
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=duyzoz/BYPASS-ALL-IN-ONE&type=Date)](https://star-history.com/#duyzoz/BYPASS-ALL-IN-ONE&Date)
-
-**⚡ Developed with passion by Duyzoz**
+[📥 Cài đặt ngay](#-cài-đặt-nhanh-userscript) • [✨ Tính năng](#-tính-năng-nổi-bật) • [🔍 Hướng dẫn DevTools](#-hướng-dẫn-soi-ảnh-nhiệm-vụ-trên-firefox-devtools) • [💬 Discord](#-hỗ-trợ--cộng-đồng)
 
 </div>
+
+---
+
+## 📥 Cài đặt nhanh Userscript
+
+Bấm vào đường link bên dưới để cài đặt trực tiếp vào **Tampermonkey** hoặc **Violentmonkey**:
+
+👉 **[CÀI ĐẶT GTRAFFIC BYPASS USERSCRIPT](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js)**
+
+*(Sau khi bấm, trình duyệt sẽ tự mở màn hình cài đặt của Tampermonkey. Chỉ cần nhấn **Install** là xong).*
+
+---
+
+## ✨ Tính năng nổi bật
+
+### 1. 🤖 Tự động nhận diện ảnh nhiệm vụ bằng OCR.space
+- Sử dụng API chính thức của **OCR.space** (`K84564487988957`) với OCR Engine 2 tối ưu hóa độ chính xác.
+- Tự động tìm kiếm ảnh nhiệm vụ ở Bước 2, chuyển đổi sang Base64 qua HTML5 Canvas và quét chữ.
+- Thuật toán bóc tách Regex tự động nhận diện Domain chuẩn 100% và tiền tố tìm kiếm.
+
+### 2. 🗄️ Hệ thống Key Database & Caching (+Pool)
+- Mỗi URL hoặc chiến dịch có một **Key định danh riêng** (lấy từ URL `gtraffic.io/{key}`).
+- Khi quét xong, kết quả sẽ được lưu vào cơ sở dữ liệu nội bộ (`+Pool`).
+- Lần sau khi gặp lại Key đó, script sẽ **tự động gọi từ Database** mà không cần tốn lượt quét OCR!
+
+### 3. 🛡️ Tab Ngầm Siêu Nhẹ & Chống Đóng Băng (Fix Tab Anti-Freeze)
+- Tự động mở website đích ở **chế độ Tab Ngầm (`active: false`)**, người dùng không bị gián đoạn hay nhảy màn hình.
+- **Bypass cơ chế dừng đếm ngược:** Ghi đè `EventTarget.addEventListener` (chặn `visibilitychange`, `blur`, `pagehide`), ép `document.hidden = false` và chuyển `requestAnimationFrame` về chu kỳ 16ms (`~60 FPS`). Dù tab đang ẩn, bộ đếm thời gian vẫn chạy với tốc độ tối đa!
+
+### 4. 🌐 Giả mạo nguồn truy cập (Fake Google Referrer)
+- Can thiệp ở tầng `document-start`, ép `document.referrer = 'https://www.google.com/'`.
+- Giúp website khách hàng tin rằng traffic xuất phát từ việc tìm kiếm tự nhiên trên Google.
+
+### 5. 🎯 Tự động căn giữa & Bấm nút (#avt-btn)
+- Tự định vị nút nhận mã `#avt-btn`, viền đỏ cảnh báo, cuộn vào giữa màn hình.
+- Giả lập chuỗi sự kiện chuột (`mousedown` ➔ `mouseup` ➔ `click`) để kích hoạt đếm ngược.
+
+### 6. ⏱️ Đồng bộ thời gian thực & Tự động sao chép mã
+- Tab ngầm liên tục bắn số giây còn lại (`PING`) về Tab Mẹ GTraffic, hiển thị Badge tiến độ: `Đang ủ (KEY): 45s`.
+- Khi đếm xong, mã được tự động lưu vào Clipboard, điền tự động vào ô xác nhận của GTraffic và tự đóng tab ngầm sau 2 giây.
+
+---
+
+## 🖥️ Giao diện Cyber HUD (Duyzoz Edition)
+
+Giao diện được thiết kế hiện đại chuẩn Cyberpunk / Glassmorphism:
+- **Badge trạng thái:** Hiển thị `Sẵn sàng`, `Đang quét OCR...`, `Đang ủ (KEY): XXs`, `Hoàn thành!`.
+- **Nút "Quét lại" / "Quét Key":** Thao tác thủ công hoặc ép quét lại ảnh nếu cần.
+- **Nút "Lấy mã ngay":** Kích hoạt mở tab ngầm làm nhiệm vụ.
+- **Nút "+Pool":** Quản lý danh sách Key & URL đã lưu trữ trong database.
+- **Hộp Console Log:** Cập nhật diễn biến từng bước minh bạch.
+
+---
+
+## 🔍 Hướng dẫn soi ảnh nhiệm vụ trên Firefox DevTools
+
+Nếu bạn muốn kiểm tra xem ảnh nhiệm vụ trả về từ đâu trong backend của GTraffic:
+
+1. Mở trang nhiệm vụ `https://gtraffic.io/...` trên Firefox.
+2. Nhấn phím `F12` (hoặc chuột phải chọn **Kiểm tra / Inspect**).
+3. **Kiểm tra DOM (Thẻ Inspector):**
+   - Bấm vào biểu tượng con trỏ góc trái DevTools ➔ chỉ vào ảnh kết quả Google ở Bước 2.
+   - Bạn sẽ thấy thẻ `<img src="...">` nằm trong thẻ cha chứa chữ `"Bước 02"`.
+4. **Kiểm tra Network (Thẻ Mạng):**
+   - Chuyển sang tab **Mạng (Network)** ➔ Chọn bộ lọc **Ảnh (Images)** hoặc **Fetch/XHR**.
+   - Tải lại trang (F5): Bạn sẽ thấy các request gọi ảnh nhiệm vụ và API chi tiết của chiến dịch.
+
+---
+
+## 💬 Hỗ trợ & Cộng đồng
+
+- **Tác giả:** Duyzoz
+- **Discord:** [Tham gia Discord nhận bản cập nhật](https://discord.gg/vnbp)
+- **Bản quyền:** MIT License © 2026 Duyzoz

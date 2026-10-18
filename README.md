@@ -6,7 +6,7 @@
 ![Tampermonkey](https://img.shields.io/badge/Tampermonkey-v4.0+-black.svg)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success.svg)
-![Version](https://img.shields.io/badge/Version-2.1.0-cyan.svg)
+![Version](https://img.shields.io/badge/Version-3.0.0-cyan.svg)
 
 **Công cụ bypass tự động nhiệm vụ GTraffic chuyên dụng & thông minh nhất**  
 *Tích hợp AI OCR nhận diện ảnh, Fake Google Referrer, Chống đóng băng tab ngầm & Tự động lấy mã*  
@@ -22,9 +22,9 @@
 
 Bấm vào đường link bên dưới để cài đặt trực tiếp vào **Tampermonkey** hoặc **Violentmonkey**:
 
-👉 **[CÀI ĐẶT GTRAFFIC BYPASS USERSCRIPT](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js)**
+👉 **[CÀI ĐẶT GTRAFFIC BYPASS USERSCRIPT v3.0.0](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js?v=3.0.0)**
 
-*(Sau khi bấm, trình duyệt sẽ tự mở màn hình cài đặt của Tampermonkey. Chỉ cần nhấn **Install** là xong).*
+*(Nếu bạn đang dùng bản cũ, vui lòng xóa bản cũ trong Dashboard Tampermonkey hoặc mở link trên rồi nhấn **Reinstall / Update** để cập nhật lên v3.0.0).*
 
 ---
 

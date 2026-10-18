@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * GTraffic Bypass All-In-One (Duyzoz Edition) - Core Engine v2.2.0
+ * GTraffic Bypass All-In-One (Duyzoz Edition) - Core Engine v2.3.0
  * Author: Duyzoz
  * Repo: https://github.com/duyzoz/BYPASS-ALL-IN-ONE
  * =========================================================================
@@ -56,6 +56,28 @@
     } catch (err) {}
     document.body.removeChild(ta);
     return ok;
+  }
+
+  function sanitizeUrl(rawUrl) {
+    if (!rawUrl) return "";
+    let u = rawUrl.trim();
+    // 1. Cắt bỏ mọi breadcrumb hoặc chữ sau khoảng trắng, dấu >, › (vd: "> H88" hay "i5t")
+    u = u.split(/[\s\>\›\–\—\|]/)[0].trim();
+    // 2. Loại bỏ hoàn toàn mọi ký tự không phải ASCII để tránh lỗi Punycode (xn--...)
+    u = u.replace(/[^\x21-\x7E]/g, "");
+    // 3. Xóa dấu chấm hoặc gạch ở đầu domain (vd: ...entasymarcadeo.co -> entasymarcadeo.co)
+    u = u.replace(/^(https?:\/\/)?[\.\-_~*]+/, "$1");
+    // 4. Xóa dấu chấm thừa ở đuôi domain
+    u = u.replace(/[\.\-_~*]+$/, "");
+    if (!/^https?:\/\//i.test(u)) {
+      u = "https://" + u;
+    }
+    try {
+      const parsed = new URL(u);
+      return parsed.origin + (parsed.pathname === "/" ? "/" : parsed.pathname);
+    } catch (e) {
+      return u;
+    }
   }
 
   function getPool() {
@@ -216,7 +238,7 @@
   }
 
   // =========================================================================
-  // GTRAFFIC TASK PAGE MODE: UI HUD, OCR, Pool Cache & Runner
+  // GTRAFFIC TASK PAGE MODE: UI HUD, OCR, Smart Domain Recovery & Runner
   // =========================================================================
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -683,7 +705,6 @@
     function processImageOcr(imgEl, key) {
       setLog("📡 Đang trích xuất dữ liệu ảnh từ CDN...");
 
-      // Lấy link ảnh thực tế từ currentSrc hoặc src hoặc srcset
       let imgSrc = imgEl.currentSrc || imgEl.src;
       if (!imgSrc && imgEl.srcset) {
         imgSrc = imgEl.srcset.split(" ")[0];
@@ -740,7 +761,6 @@
       const formData = new FormData();
       formData.append("apikey", OCR_API_KEY);
       formData.append("base64Image", base64Data);
-      // LƯU Ý QUAN TRỌNG: Language trong OCR.space dùng 'eng' (không dùng 'vie' để tránh lỗi E201)
       formData.append("language", "eng");
       formData.append("isOverlayRequired", "false");
       formData.append("OCREngine", "2");
@@ -756,7 +776,7 @@
             const json = JSON.parse(res.responseText);
             if (json && json.ParsedResults && json.ParsedResults[0]) {
               const rawText = json.ParsedResults[0].ParsedText || "";
-              setLog("✨ OCR đọc xong! Đang lọc domain...");
+              setLog("✨ OCR đọc xong! Đang phân tích và kết nối kiểm tra domain...");
               handleOcrSuccess(rawText, key);
             } else {
               const errMsg = (json.ErrorMessage && json.ErrorMessage[0]) || "Không có kết quả chữ";
@@ -778,67 +798,139 @@
     function handleOcrSuccess(rawText, key) {
       console.log("[GTraffic OCR Raw]:\n" + rawText);
 
-      // Bóc tách Domain từ rawText
-      const domain = parseDomainFromOcr(rawText);
+      // 1. Bóc tách Domain từ rawText (đã lọc sạch ký tự unicode rác, icon sao, breadcrumb)
+      const candidateDomain = parseDomainFromOcr(rawText);
 
-      if (domain) {
-        const finalUrl = domain.startsWith("http") ? domain : `https://${domain}/`;
-        urlInput.value = finalUrl;
+      if (!candidateDomain) {
+        setBadge("Cần nhập tay", "normal");
+        setLog("⚠️ Không tách được domain rõ ràng từ OCR. Vui lòng nhập link tay!");
+        return;
+      }
+
+      setLog(`🔍 Phát hiện: ${candidateDomain} (Đang kiểm tra & giải mã ký tự bị che...)`);
+
+      // 2. TỰ ĐỘNG KHÔI PHỤC KÝ TỰ BỊ CHE (VD: v + entasymarcadeo.co -> ventasymercadeo.co)
+      recoverMaskedDomain(candidateDomain, finalDomain => {
+        const cleanUrl = sanitizeUrl(finalDomain);
+        urlInput.value = cleanUrl;
         setBadge("Đã nhận diện", "success");
-        setLog(`✅ Domain: ${domain}`);
+        setLog(`✅ Domain chuẩn xác: ${cleanUrl}`);
 
         // Lưu vào Pool Database cho Key này
         const currentPool = getPool();
-        currentPool[key] = { url: finalUrl, date: Date.now() };
+        currentPool[key] = { url: cleanUrl, date: Date.now() };
         savePool(currentPool);
 
         // Tự động chạy nếu có tick
         if (autoRunChk.checked) {
           setTimeout(startExecution, 1000);
         }
-      } else {
-        setBadge("Cần nhập tay", "normal");
-        setLog("⚠️ Không tách được domain rõ ràng. Đoạn OCR: " + rawText.substring(0, 40) + "...");
-      }
+      });
     }
 
     function parseDomainFromOcr(rawText) {
       if (!rawText) return null;
-      const clean = rawText.replace(/\r\n/g, "\n");
+      // LOẠI BỎ HOÀN TOÀN TẤT CẢ KÝ TỰ NON-ASCII (icon ngôi sao, badge, unicode ...)
+      // Thay thế bằng khoảng trắng để tránh dính liền vào đuôi domain
+      const asciiClean = rawText.replace(/[^\x20-\x7E\n]/g, " ").replace(/\r\n/g, "\n");
 
       // 1. Tìm định dạng URL chuẩn: https://...
-      const urlMatch = clean.match(/https?:\/\/([^\s\/\>]+)/i);
+      const urlMatch = asciiClean.match(/https?:\/\/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})/i);
       if (urlMatch) {
         let d = urlMatch[1].replace(/^[.*_~-]+/, "").replace(/[.*_~-]+$/, "");
         if (d.includes(".")) return d;
       }
 
-      // 2. Tìm domain có phần mở rộng phổ biến (kể cả bị che phần đầu như ...entasymarcadeo.co)
-      const domainRegex = /([a-zA-Z0-9_-]{2,}\.(?:com|vn|co|in|net|org|io|top|club|xyz|site|vip|cc|biz|info|live|app))\b/i;
-      const domainMatch = clean.match(domainRegex);
+      // 2. Tìm domain có phần mở rộng phổ biến
+      const domainRegex = /\b([a-zA-Z0-9_-]{2,}\.(?:com|vn|co|in|net|org|io|top|club|xyz|site|vip|cc|biz|info|live|app))\b/i;
+      const domainMatch = asciiClean.match(domainRegex);
       if (domainMatch) {
-        let d = domainMatch[1].replace(/^[.*_~-]+/, "");
+        let d = domainMatch[1].replace(/^[.*_~-]+/, "").replace(/[.*_~-]+$/, "");
         return d;
       }
 
-      // 3. Tìm dạng có dấu chấm phân cách
-      const looseMatch = clean.match(/([a-zA-Z0-9-]{3,}\.[a-zA-Z]{2,6})/);
+      // 3. Tìm dạng lỏng
+      const looseMatch = asciiClean.match(/([a-zA-Z0-9-]{3,}\.[a-zA-Z]{2,6})/);
       if (looseMatch) {
-        return looseMatch[1].replace(/^[.*_~-]+/, "");
+        return looseMatch[1].replace(/^[.*_~-]+/, "").replace(/[.*_~-]+$/, "");
       }
 
       return null;
     }
 
     // =====================================================================
+    // THUẬT TOÁN TỰ ĐỘNG KHÔI PHỤC KÝ TỰ BỊ CHE (SMART RECOVERY)
+    // =====================================================================
+    function recoverMaskedDomain(domain, callback) {
+      // Làm sạch sơ bộ
+      let base = domain.replace(/^[.*_~-]+/, "").toLowerCase();
+
+      // Kiểm tra xem chính domain này có ping được không
+      pingTestDomain(base, isOk => {
+        if (isOk) {
+          callback(base);
+          return;
+        }
+
+        // Nếu domain không phân giải được (bị che chữ cái đầu như [v]entasymarcadeo.co)
+        // Danh sách các ký tự đầu phổ biến nhất trong tiếng Việt / tiếng Anh
+        const prefixCandidates = ["v", "w", "s", "t", "b", "c", "d", "m", "n", "p", "r", "k", "l", "h", "g", "f"];
+        let found = false;
+        let checkedCount = 0;
+
+        for (const p of prefixCandidates) {
+          const testCandidate = p + base;
+          pingTestDomain(testCandidate, okCandidate => {
+            checkedCount++;
+            if (okCandidate && !found) {
+              found = true;
+              console.log(`[GTraffic Bypass] 🎉 Đã khôi phục thành công ký tự bị che: [${p}] + ${base} = ${testCandidate}`);
+              callback(testCandidate);
+            } else if (checkedCount === prefixCandidates.length && !found) {
+              // Nếu thử hết không được thì trả về base gốc
+              callback(base);
+            }
+          });
+        }
+      });
+    }
+
+    function pingTestDomain(d, cb) {
+      const testUrl = "https://" + d + "/";
+      GM_xmlhttpRequest({
+        method: "HEAD",
+        url: testUrl,
+        timeout: 2500,
+        onload: function (res) {
+          // Bất kỳ status nào từ 200 đến 499 (kể cả 403, 301, 302, 404 của web) đều chứng minh tên miền TỒN TẠI trên DNS
+          if (res.status >= 200 && res.status < 500) {
+            cb(true);
+          } else {
+            cb(false);
+          }
+        },
+        onerror: function () {
+          cb(false);
+        },
+        ontimeout: function () {
+          cb(false);
+        }
+      });
+    }
+
+    // =====================================================================
     // HÀM CHẠY TAB NGẦM VÀ LẮNG NGHE KẾT QUẢ
     // =====================================================================
     function startExecution() {
-      const targetUrl = urlInput.value.trim();
-      if (!targetUrl) {
+      const rawUrl = urlInput.value.trim();
+      if (!rawUrl) {
         alert("Vui lòng quét hoặc nhập URL đích trước!");
         return;
       }
+
+      // Ép chuẩn hóa URL (không khoảng trắng, không icon unicode rác, đúng https://)
+      const targetUrl = sanitizeUrl(rawUrl);
+      urlInput.value = targetUrl;
 
       setLog(`🚀 Đang mở tab ngầm: ${targetUrl}`);
       setBadge(`Đang ủ (${taskKey})...`, "info");

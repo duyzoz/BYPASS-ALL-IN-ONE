@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GTraffic Bypass All-In-One (Duyzoz)
 // @namespace    https://gtraffic.io/
-// @version      3.3.0
-// @description  Bypass tự động 2 nền tảng: gtraffic.io & direct.gtraffic.io - Hỗ trợ Redirect domain, Smart click logo G mọi vị trí, tự động đổi nhiệm vụ nếu web lỗi
+// @version      3.4.0
+// @description  Bypass 2 nền tảng: gtraffic.io & direct.gtraffic.io - Giả lập gõ phím & lướt trang người thật, Auto Click Logo G đỏ, Đếm ngược & Giao diện Cinematic siêu đẹp
 // @match        https://gtraffic.io/*
 // @match        http://gtraffic.io/*
 // @match        https://*.gtraffic.io/*
@@ -28,13 +28,16 @@
 // ==/UserScript==
 
 /* =========================================================================
-   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.3.0
-   CẬP NHẬT MỚI:
-   - FIX: Hỗ trợ Redirect tên miền (vd: luam.in -> 98win007.com) không bị ngắt script
-   - FIX: Dò tìm chuẩn xác Logo nút G ở MỌI VỊ TRÍ ngẫu nhiên trên trang
-   - FIX: Xử lý delay 2-6s, tự cuộn tới tọa độ & bắn toàn bộ chuỗi sự kiện click
-   - NEW: Tự động phát hiện nếu web đích không có nút G sau 12s -> báo lỗi và
-          TỰ ĐỘNG BẤM 'ĐỔI TỪ KHÓA MỚI' trên GTraffic!
+   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.4.0 CINEMATIC
+   - GIẢ LẬP NGƯỜI THẬT:
+     1. Gõ tên miền từng chữ (Typewriter effect) mô phỏng gõ tay.
+     2. Khi tab đích mở ra: Lướt chuột mượt (Smooth human scroll) từng đoạn xuống bài
+        kèm phát sinh sự kiện di chuột ngẫu nhiên (mousemove) để vượt cơ chế chống bot.
+     3. Đợi nút Logo G đỏ hiển thị chuẩn xác (tránh bị cấp G xanh spam).
+     4. Tự động click, giữ tab 60 FPS, đồng bộ đếm giây.
+     5. Tự động đổi nhiệm vụ (bấm 'ĐỔI TỪ KHÓA MỚI') nếu web đích không có nút G.
+   - GIAO DIỆN CINEMATIC:
+     Khung đếm ngược neon phát sáng, Cyberpunk Vault hiển thị mã cực ngầu!
    ========================================================================= */
 
 (function () {
@@ -104,7 +107,7 @@
 
   // ===========================================================================
   // ★ TARGET WEBSITE AGENT (chạy trong tab đích)
-  //   HỖ TRỢ REDIRECT & DÒ TÌM NÚT G MỌI VỊ TRÍ
+  //   MÔ PHỎNG LƯỚT CHUỘT NGƯỜI THẬT + DÒ NÚT G ĐỎ
   // ===========================================================================
   if (!isAnyGTraffic) {
     let session = null;
@@ -112,19 +115,15 @@
       session = GM_getValue(KEY_SESSION, null);
     } catch (_) { return; }
 
-    // Nếu không có phiên chờ lấy mã hoặc phiên quá 5 phút -> thoát ngay
     if (!session || !session.targetUrl || !session.key) return;
     if (Date.now() - (session.ts || 0) > 300000) return;
 
-    // Danh sách các trang web tuyệt đối không can thiệp
     const IGNORED_HOSTS = [
       "google.com", "google.com.vn", "youtube.com", "facebook.com",
       "discord.com", "discord.gg", "github.com", "gtraffic.io"
     ];
     if (IGNORED_HOSTS.some(h => hostname.endsWith(h))) return;
 
-    // HỖ TRỢ REDIRECT:
-    // Kiểm tra xem trang hiện tại có khớp hostname hoặc được mở trong vòng 45s của phiên không
     let isTarget = false;
     try {
       const targetHost = new URL(session.targetUrl).hostname.replace(/^www\./, "").toLowerCase();
@@ -134,10 +133,9 @@
       }
     } catch (_) {}
 
-    // Nếu không trùng domain gốc, nhưng phiên vừa tạo dưới 45 giây -> Đây là trang được Redirect tới!
+    // Hỗ trợ website chuyển hướng (redirect)
     if (!isTarget && (Date.now() - (session.ts || 0) < 45000)) {
       isTarget = true;
-      // Cập nhật URL đã redirect vào session
       session.redirectedUrl = window.location.href;
       GM_setValue(KEY_SESSION, session);
     }
@@ -167,24 +165,23 @@
     window.requestAnimationFrame = cb => window.setTimeout(() => cb(performance.now()), 16);
     window.cancelAnimationFrame  = id => window.clearTimeout(id);
 
-    // 3. Khởi chạy agent tự động click nút
-    waitForBody(() => runTargetAgent());
+    // 3. Khởi chạy agent mô phỏng người thật
+    waitForBody(() => runTargetAgent(session));
     return;
   }
 
   // ===========================================================================
-  // TARGET AGENT LOGIC (Dò tìm nút G ở mọi vị trí + Tự báo lỗi nếu không có nút)
+  // TARGET AGENT LOGIC (LƯỚT TRANG NGƯỜI THẬT + CLICK NÚT G + AUTO ĐỔI TASK)
   // ===========================================================================
-  function runTargetAgent() {
+  function runTargetAgent(session) {
     let hasClicked = false;
     let clickCount = 0;
     let lastSec = null;
     let codeExtracted = false;
-    let searchSeconds = 0;
 
-    // HÀM DÒ TÌM NÚT G THÔNG MINH Ở MỌI VỊ TRÍ TRÊN TRANG
-    function findTargetButton() {
-      // 1. ID & Class chuẩn của Direct GTraffic & Standard GTraffic
+    // Tìm nút G thật (chỉ nhận diện nút cam/đỏ, bỏ qua nút xanh giả)
+    function findRealGButton() {
+      // 1. Selector Direct & Standard
       const directSvg = document.querySelector("#avt-d-btn, svg.logo-dr-svg-us, #trade-d-btn_arrow");
       if (directSvg) return directSvg;
 
@@ -194,7 +191,7 @@
       const stdBtn = document.querySelector("#avt-btn, [class*='avt-btn'], #trade-btn");
       if (stdBtn) return stdBtn;
 
-      // 2. Quét thẻ SVG có chứa hình tròn màu cam/đỏ (#E5572D / #E3572D) hoặc chữ "g"
+      // 2. Quét SVG có chữ "g" hoặc vòng tròn cam/đỏ (#E5572D / #E3572D)
       for (const svg of document.querySelectorAll("svg")) {
         const txt = (svg.textContent || "").trim();
         if (txt === "g" || txt.startsWith("g")) return svg;
@@ -207,14 +204,14 @@
         }
       }
 
-      // 3. Quét quanh khu vực nhúng mã btd.js
+      // 3. Khu vực chứa script btd.js
       const btdScript = document.querySelector('script[src*="btd.js"], script[src*="mammon-arrived"]');
       if (btdScript && btdScript.parentElement) {
         const nearby = btdScript.parentElement.querySelector('svg, div[id*="trade"], div[id*="btn"]');
         if (nearby) return nearby;
       }
 
-      // 4. Tìm thẻ bất kỳ có chữ "LẤY MÃ"
+      // 4. Thẻ có chữ "LẤY MÃ"
       for (const el of document.querySelectorAll("button, a, div[role='button'], div, span")) {
         const txt = el.innerText || el.textContent || "";
         if (/lấy\s*mã/i.test(txt) && el.children.length <= 2) {
@@ -226,7 +223,6 @@
       return null;
     }
 
-    // HÀM CLICK THÔNG MINH MỌI TẦNG ELEMENT
     function smartClickButton(target) {
       const elementsToClick = new Set();
       elementsToClick.add(target);
@@ -241,13 +237,13 @@
       const svg = document.querySelector("#avt-d-btn, svg.logo-dr-svg-us");
       if (svg) elementsToClick.add(svg);
 
-      // Cuộn trang mượt vào giữa màn hình
       try {
-        target.scrollIntoView({ behavior: "instant", block: "center" });
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
       } catch (_) {}
 
       try {
         target.style.outline = "4px solid #22c55e";
+        target.style.boxShadow = "0 0 20px #22c55e";
       } catch (_) {}
 
       const r = target.getBoundingClientRect();
@@ -255,15 +251,10 @@
       const cy = r.top + r.height / 2;
 
       const eventInit = {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        clientX: cx,
-        clientY: cy,
-        screenX: cx + window.screenX,
-        screenY: cy + window.screenY,
-        button: 0,
-        buttons: 1
+        view: window, bubbles: true, cancelable: true,
+        clientX: cx, clientY: cy,
+        screenX: cx + window.screenX, screenY: cy + window.screenY,
+        button: 0, buttons: 1
       };
 
       elementsToClick.forEach(node => {
@@ -278,7 +269,6 @@
     }
 
     function extractCountdown() {
-      // 1. Thẻ SVG content của direct
       const directContent = document.querySelector("#trade-d-btn__content");
       if (directContent) {
         const txt = (directContent.textContent || directContent.innerHTML || "").trim();
@@ -286,7 +276,6 @@
         if (m && +m[1] > 0 && +m[1] <= 180) return +m[1];
       }
 
-      // 2. Thẻ đếm ngược tiêu chuẩn
       const stdContent = document.querySelector('.trade-btn__content, [id*="trade"][id*="content"]');
       if (stdContent) {
         const txt = (stdContent.textContent || stdContent.innerText || "").trim();
@@ -294,7 +283,6 @@
         if (m && +m[1] > 0 && +m[1] <= 180) return +m[1];
       }
 
-      // 3. Quét phần tử có định dạng số đếm lùi
       for (const el of document.querySelectorAll('[class*="timer"], [class*="countdown"], [id*="count"], .countdown, #notice-d-btn, #trade-d-btn')) {
         const txt = el.innerText || el.textContent || "";
         const m = txt.match(/\b(\d{1,3})\s*(?:s|giây|sec)?\b/i);
@@ -326,57 +314,95 @@
       return null;
     }
 
-    // Polling mỗi 400ms: Dò tìm nút, click và theo dõi tiến độ
-    const loop = setInterval(() => {
-      const session = GM_getValue(KEY_SESSION, null);
-      if (!session || !session.key) return;
+    // =========================================================================
+    // TUYỆT KỸ: MÔ PHỎNG NGƯỜI THẬT LƯỚT CHUỘT XUỐNG DƯỚI BÀI VIẾT
+    // =========================================================================
+    function startHumanScrollingSimulation(onFoundOrEnd) {
+      GM_setValue(KEY_PING, { key: session.key, status: "SCROLLING", seconds: "Đang lướt đọc bài...", ts: Date.now() });
 
-      searchSeconds += 0.4;
+      let currentY = 0;
+      let totalTicks = 0;
 
-      // 1. Dò tìm và click nút
-      if (!hasClicked || (clickCount < 6 && lastSec === null)) {
-        const btn = findTargetButton();
+      const scrollInterval = setInterval(() => {
+        totalTicks++;
+        const pageHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight * 2);
+
+        // Cuộn ngẫu nhiên từng bước 280px - 550px như người lăn chuột
+        const step = Math.floor(Math.random() * 270) + 280;
+        currentY = Math.min(currentY + step, pageHeight);
+
+        window.scrollTo({ top: currentY, behavior: "smooth" });
+
+        // Giả lập di chuyển chuột (mousemove) ngẫu nhiên
+        const rx = Math.floor(Math.random() * (window.innerWidth - 80)) + 40;
+        const ry = Math.floor(Math.random() * (window.innerHeight - 80)) + 40;
+        window.dispatchEvent(new MouseEvent("mousemove", { clientX: rx, clientY: ry, bubbles: true }));
+
+        // Kiểm tra xem nút G đỏ đã xuất hiện chưa
+        const btn = findRealGButton();
         if (btn && btn.isConnected) {
           const style = window.getComputedStyle(btn);
-          const isVisible = style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
-          if (isVisible) {
-            smartClickButton(btn);
-            clickCount++;
-            hasClicked = true;
-            // Báo về tab mẹ là đã phát hiện và click nút
-            GM_setValue(KEY_PING, { key: session.key, status: "CLICKED", seconds: "Đang kích hoạt...", ts: Date.now() });
+          if (style.display !== "none" && style.visibility !== "hidden") {
+            clearInterval(scrollInterval);
+            setTimeout(() => onFoundOrEnd(btn), 600);
+            return;
           }
         }
-      }
 
-      // 2. Đọc thời gian đếm ngược
-      const sec = extractCountdown();
-      if (sec !== null && sec !== lastSec) {
-        lastSec = sec;
-        GM_setValue(KEY_PING, { key: session.key, seconds: sec, ts: Date.now() });
-      }
-
-      // 3. Sau 12 giây nếu hoàn toàn không có nút G và không đếm giây -> Báo lỗi để GTraffic đổi từ khóa!
-      if (!hasClicked && searchSeconds >= 12 && lastSec === null) {
-        clearInterval(loop);
-        GM_setValue(KEY_PING, { key: session.key, error: "NO_BUTTON", message: "Không tìm thấy nút lấy mã trên website này!", ts: Date.now() });
-        setTimeout(() => { try { window.close(); } catch (_) {} }, 2500);
-        return;
-      }
-
-      // 4. Lấy mã khi đếm xong
-      if (!codeExtracted) {
-        const code = extractSecretCode();
-        if (code) {
-          codeExtracted = true;
-          copyToClipboard(code);
-          GM_setValue(KEY_DONE, { key: session.key, code, ts: Date.now() });
-          GM_deleteValue(KEY_SESSION);
-          clearInterval(loop);
-          setTimeout(() => { try { window.close(); } catch (_) {} }, 2000);
+        // Đã cuộn hết trang hoặc quá 14 lần cuộn (~6 giây)
+        if (currentY >= pageHeight - 150 || totalTicks >= 14) {
+          clearInterval(scrollInterval);
+          setTimeout(() => onFoundOrEnd(findRealGButton()), 800);
         }
-      }
-    }, 400);
+      }, 420);
+    }
+
+    // Bắt đầu mô phỏng lướt trang sau khi load 600ms
+    setTimeout(() => {
+      startHumanScrollingSimulation(btn => {
+        // Vòng lặp theo dõi & kích hoạt nút
+        let attempts = 0;
+        const mainLoop = setInterval(() => {
+          attempts++;
+          const targetBtn = btn && btn.isConnected ? btn : findRealGButton();
+
+          if (targetBtn && targetBtn.isConnected && (!hasClicked || clickCount < 5)) {
+            smartClickButton(targetBtn);
+            clickCount++;
+            hasClicked = true;
+            GM_setValue(KEY_PING, { key: session.key, status: "CLICKED", seconds: "Đã bấm nút G!", ts: Date.now() });
+          }
+
+          // Theo dõi đếm ngược
+          const sec = extractCountdown();
+          if (sec !== null && sec !== lastSec) {
+            lastSec = sec;
+            GM_setValue(KEY_PING, { key: session.key, seconds: sec, ts: Date.now() });
+          }
+
+          // Lấy mã khi có
+          if (!codeExtracted) {
+            const code = extractSecretCode();
+            if (code) {
+              codeExtracted = true;
+              copyToClipboard(code);
+              GM_setValue(KEY_DONE, { key: session.key, code, ts: Date.now() });
+              GM_deleteValue(KEY_SESSION);
+              clearInterval(mainLoop);
+              setTimeout(() => { try { window.close(); } catch (_) {} }, 2000);
+              return;
+            }
+          }
+
+          // NẾU SAU 12s HOÀN TOÀN KHÔNG CÓ NÚT G -> BÁO LỖI ĐỂ ĐỔI NHIỆM VỤ!
+          if (!hasClicked && attempts >= 24 && lastSec === null) {
+            clearInterval(mainLoop);
+            GM_setValue(KEY_PING, { key: session.key, error: "NO_BUTTON", message: "Web đích không có nút lấy mã hợp lệ!", ts: Date.now() });
+            setTimeout(() => { try { window.close(); } catch (_) {} }, 2500);
+          }
+        }, 500);
+      });
+    }, 600);
   }
 
   // ===========================================================================
@@ -412,7 +438,7 @@
   }, 1000);
 
   // ===========================================================================
-  // MOUNT HUD
+  // MOUNT HUD — GIAO DIỆN CINEMATIC SIÊU ĐẸP & CHỮ NỔI
   // ===========================================================================
   function mountHud() {
     if (document.getElementById("gtraffic-hud-container")) return;
@@ -426,153 +452,191 @@
       const style = document.createElement("style");
       style.id = styleId;
       style.textContent = `
+@keyframes gt-pulse-glow { 0%,100% { box-shadow: 0 0 15px rgba(56,189,248,.35), 0 16px 36px rgba(0,0,0,.85); } 50% { box-shadow: 0 0 26px rgba(56,189,248,.65), 0 18px 40px rgba(0,0,0,.95); } }
+@keyframes gt-spin { to { transform: rotate(360deg); } }
+@keyframes gt-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes gt-pop { 0% { transform: scale(.8); opacity:0; } 70% { transform: scale(1.05); } 100% { transform: scale(1); opacity:1; } }
+
 #gtraffic-hud-container {
   position: fixed !important;
-  bottom: 20px !important;
-  right: 20px !important;
-  width: 375px !important;
+  bottom: 22px !important;
+  right: 22px !important;
+  width: 385px !important;
   max-width: 95vw !important;
-  background: #0f172a !important;
-  border: 1px solid #1e293b !important;
-  border-radius: 14px !important;
-  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.85) !important;
+  background: linear-gradient(165deg, #0f172a 0%, #090e17 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.28) !important;
+  border-radius: 16px !important;
+  animation: gt-pulse-glow 4s infinite !important;
   color: #f1f5f9 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
   font-size: 13px !important;
   z-index: 2147483647 !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
   user-select: none !important;
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
 }
 #gtraffic-hud-container * { box-sizing: border-box !important; }
+
 .gt-hdr {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  padding: 11px 14px !important;
-  background: #0a1628 !important;
-  border-bottom: 1px solid #1e293b !important;
+  padding: 12px 16px !important;
+  background: rgba(10, 22, 40, 0.85) !important;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.9) !important;
   cursor: grab !important;
 }
 .gt-dot {
-  width: 8px !important;
-  height: 8px !important;
+  width: 9px !important;
+  height: 9px !important;
   border-radius: 50% !important;
   background: #38bdf8 !important;
-  box-shadow: 0 0 8px #38bdf8 !important;
-  flex-shrink: 0 !important;
+  box-shadow: 0 0 10px #38bdf8 !important;
 }
 .gt-title {
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   font-size: 14px !important;
-  color: #fff !important;
+  background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
   margin-left: 8px !important;
+  letter-spacing: .3px !important;
 }
-.gt-author { color: #94a3b8 !important; font-weight: 400 !important; font-size: 12px !important; }
 .gt-badge {
   background: #1e293b !important;
   border: 1px solid #f59e0b !important;
   color: #f59e0b !important;
   font-size: 11px !important;
-  font-weight: 700 !important;
-  padding: 3px 10px !important;
+  font-weight: 800 !important;
+  padding: 4px 11px !important;
   border-radius: 20px !important;
   max-width: 175px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  text-shadow: 0 0 8px rgba(245,158,11,.4) !important;
 }
-.gt-badge.ok   { border-color: #22c55e !important; color: #22c55e !important; }
-.gt-badge.info { border-color: #38bdf8 !important; color: #38bdf8 !important; }
-.gt-badge.err  { border-color: #ef4444 !important; color: #ef4444 !important; }
+.gt-badge.ok   { border-color: #22c55e !important; color: #22c55e !important; text-shadow: 0 0 8px rgba(34,197,94,.5) !important; }
+.gt-badge.info { border-color: #38bdf8 !important; color: #38bdf8 !important; text-shadow: 0 0 8px rgba(56,189,248,.5) !important; }
+.gt-badge.err  { border-color: #ef4444 !important; color: #ef4444 !important; text-shadow: 0 0 8px rgba(239,68,68,.5) !important; }
 
-.gt-body {
-  padding: 12px 14px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 9px !important;
-}
-.gt-row {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-}
-.gt-lbl { font-size: 11.5px !important; font-weight: 600 !important; color: #94a3b8 !important; }
+.gt-body { padding: 13px 16px !important; display: flex !important; flex-direction: column !important; gap: 10px !important; }
+.gt-row { display: flex !important; justify-content: space-between !important; align-items: center !important; }
+.gt-lbl { font-size: 11.5px !important; font-weight: 700 !important; color: #94a3b8 !important; text-transform: uppercase !important; letter-spacing: .4px !important; }
 .gt-link {
   background: none !important;
   border: none !important;
   color: #38bdf8 !important;
   font-size: 11.5px !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   cursor: pointer !important;
   padding: 0 !important;
 }
-.gt-link:hover { text-decoration: underline !important; }
+.gt-link:hover { text-decoration: underline !important; color: #7dd3fc !important; }
+
 .gt-input {
   width: 100% !important;
-  background: #020617 !important;
+  background: #030712 !important;
   border: 1px solid #1e293b !important;
-  border-radius: 7px !important;
-  padding: 7px 10px !important;
-  color: #fff !important;
-  font-size: 12px !important;
-  outline: none !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  color: #f8fafc !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
   font-family: Consolas, monospace !important;
+  outline: none !important;
 }
-.gt-input:focus { border-color: #0284c7 !important; }
-.gt-ctrls {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  margin-top: 2px !important;
-}
-.gt-chk-lbl {
-  display: flex !important;
-  align-items: center !important;
-  gap: 5px !important;
-  font-size: 12px !important;
-  color: #cbd5e1 !important;
-  cursor: pointer !important;
-  flex: 1 !important;
-}
+.gt-input:focus { border-color: #38bdf8 !important; box-shadow: 0 0 10px rgba(56,189,248,.25) !important; }
+
+.gt-ctrls { display: flex !important; align-items: center !important; gap: 8px !important; }
+.gt-chk-lbl { display: flex !important; align-items: center !important; gap: 6px !important; font-size: 12px !important; font-weight: 600 !important; color: #cbd5e1 !important; cursor: pointer !important; flex: 1 !important; }
 .gt-btn {
   border: none !important;
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   font-size: 12.5px !important;
-  padding: 8px 14px !important;
+  padding: 8px 15px !important;
   border-radius: 8px !important;
   cursor: pointer !important;
-  white-space: nowrap !important;
   transition: .15s !important;
 }
-.gt-btn.blue { background: #0284c7 !important; color: #fff !important; }
-.gt-btn.blue:hover { background: #0369a1 !important; }
+.gt-btn.blue { background: linear-gradient(135deg, #0284c7, #0369a1) !important; color: #fff !important; box-shadow: 0 0 12px rgba(2,132,199,.4) !important; }
+.gt-btn.blue:hover { transform: translateY(-1px) !important; box-shadow: 0 0 18px rgba(2,132,199,.6) !important; }
 .gt-btn.gray { background: #1e293b !important; border: 1px solid #334155 !important; color: #f1f5f9 !important; }
-.gt-btn.gray:hover { background: #334155 !important; }
 
+/* BẢNG CONSOLE TRẠNG THÁI CHỮ NỔI ĐẬM */
 .gt-log {
   background: #020617 !important;
-  border: 1px solid #1e293b !important;
-  border-radius: 8px !important;
-  padding: 8px 11px !important;
-  font-size: 11.5px !important;
+  border: 1px solid rgba(56, 189, 248, 0.22) !important;
+  border-radius: 9px !important;
+  padding: 9px 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
   color: #38bdf8 !important;
   font-family: Consolas, monospace !important;
-  min-height: 44px !important;
+  min-height: 48px !important;
   display: flex !important;
   align-items: center !important;
   word-break: break-all !important;
   line-height: 1.45 !important;
+  text-shadow: 0 0 6px rgba(56,189,248,.35) !important;
 }
+
+/* WIDGET ĐẾM NGƯỢC LỚN ĐẬM CHẤT CYBER */
+.gt-countdown-box {
+  display: none;
+  background: linear-gradient(135deg, rgba(2,6,23,.9), rgba(15,23,42,.9)) !important;
+  border: 1px solid #38bdf8 !important;
+  border-radius: 10px !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+  margin-top: 2px !important;
+  box-shadow: 0 0 16px rgba(56,189,248,.3) inset !important;
+}
+.gt-cd-num {
+  font-size: 26px !important;
+  font-weight: 900 !important;
+  font-family: Consolas, monospace !important;
+  color: #38bdf8 !important;
+  text-shadow: 0 0 14px #38bdf8 !important;
+  letter-spacing: 2px !important;
+}
+
+/* KHUNG MÃ CINEMATIC SIÊU ĐẸP KHI HOÀN THÀNH */
+.gt-vault-card {
+  display: none;
+  background: linear-gradient(135deg, #064e3b 0%, #022c22 100%) !important;
+  border: 2px solid #22c55e !important;
+  border-radius: 12px !important;
+  padding: 12px !important;
+  text-align: center !important;
+  animation: gt-pop .4s ease-out !important;
+  box-shadow: 0 0 25px rgba(34,197,94,.4) !important;
+}
+.gt-vault-title {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  color: #86efac !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  margin-bottom: 4px !important;
+}
+.gt-vault-code {
+  font-size: 24px !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  font-family: Consolas, monospace !important;
+  letter-spacing: 5px !important;
+  text-shadow: 0 0 12px #22c55e !important;
+  padding: 4px 0 !important;
+}
+.gt-vault-sub {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #4ade80 !important;
+}
+
 .gt-discord {
   background: #5865f2 !important;
   border: none !important;
   color: #fff !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   font-size: 12px !important;
   padding: 8px !important;
   border-radius: 8px !important;
@@ -582,71 +646,17 @@
   justify-content: center !important;
   gap: 7px !important;
   text-decoration: none !important;
-  transition: .15s !important;
 }
 .gt-discord:hover { background: #4752c4 !important; }
 
-.gt-overlay {
-  position: fixed !important;
-  inset: 0 !important;
-  background: rgba(0, 0, 0, .78) !important;
-  z-index: 2147483648 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-.gt-modal {
-  background: #0f172a !important;
-  border: 1px solid #334155 !important;
-  border-radius: 12px !important;
-  width: 460px !important;
-  max-width: 92vw !important;
-  padding: 16px !important;
-  color: #f8fafc !important;
-}
-.gt-modal-hdr {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  margin-bottom: 10px !important;
-}
-.gt-pool-list {
-  max-height: 220px !important;
-  overflow-y: auto !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 5px !important;
-  margin: 8px 0 !important;
-}
-.gt-pi {
-  background: #020617 !important;
-  padding: 7px 10px !important;
-  border-radius: 6px !important;
-  display: flex !important;
-  align-items: center !important;
-  font-size: 12px !important;
-}
-.gt-pi-key {
-  font-weight: 700 !important;
-  color: #38bdf8 !important;
-  min-width: 95px !important;
-  flex-shrink: 0 !important;
-}
-.gt-pi-url {
-  flex: 1 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  margin: 0 8px !important;
-  color: #94a3b8 !important;
-}
-.gt-pi-del {
-  background: none !important;
-  border: none !important;
-  color: #ef4444 !important;
-  cursor: pointer !important;
-  font-weight: 700 !important;
-}
+.gt-overlay { position: fixed !important; inset: 0 !important; background: rgba(0,0,0,.8) !important; z-index: 2147483648 !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+.gt-modal { background: #0f172a !important; border: 1px solid #334155 !important; border-radius: 12px !important; width: 460px !important; max-width: 92vw !important; padding: 16px !important; color: #f8fafc !important; }
+.gt-modal-hdr { display: flex !important; justify-content: space-between !important; align-items: center !important; margin-bottom: 10px !important; }
+.gt-pool-list { max-height: 220px !important; overflow-y: auto !important; display: flex !important; flex-direction: column !important; gap: 5px !important; margin: 8px 0 !important; }
+.gt-pi { background: #020617 !important; padding: 7px 10px !important; border-radius: 6px !important; display: flex !important; align-items: center !important; font-size: 12px !important; }
+.gt-pi-key { font-weight: 700 !important; color: #38bdf8 !important; min-width: 95px !important; flex-shrink: 0 !important; }
+.gt-pi-url { flex: 1 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; margin: 0 8px !important; color: #94a3b8 !important; }
+.gt-pi-del { background: none !important; border: none !important; color: #ef4444 !important; cursor: pointer !important; font-weight: 700 !important; }
       `;
       (document.head || document.documentElement).appendChild(style);
     }
@@ -655,21 +665,21 @@
     hud.id = "gtraffic-hud-container";
     hud.innerHTML = `
 <div class="gt-hdr" id="gt-drag-handle">
-  <div style="display:flex;align-items:center"><span class="gt-dot"></span><span class="gt-title">${titlePrefix} bypass <span class="gt-author">(Duyzoz)</span></span></div>
+  <div style="display:flex;align-items:center"><span class="gt-dot"></span><span class="gt-title">${titlePrefix} bypass <span style="color:#94a3b8;font-weight:400;font-size:12px">(Duyzoz)</span></span></div>
   <div class="gt-badge" id="gt-badge">Sẵn sàng</div>
 </div>
 <div class="gt-body">
   <div class="gt-row">
-    <span class="gt-lbl">${isDirectGTraffic ? 'Tự động leak domain trực tiếp' : 'Tự động quét ảnh → URL & Key'}</span>
+    <span class="gt-lbl">${isDirectGTraffic ? 'Tự động leak domain' : 'Quét ảnh → URL & Key'}</span>
     <button class="gt-link" id="gt-rescan">${isDirectGTraffic ? '⚡ Dò lại Domain' : '🔄 Quét lại OCR'}</button>
   </div>
   <div class="gt-row">
     <span class="gt-lbl">URL / Link đích</span>
     <button class="gt-link" id="gt-clearpool" style="color:#ef4444">🗑️ Xóa Pool</button>
   </div>
-  <input class="gt-input" id="gt-url" placeholder="Đang dò tìm link đích...">
+  <input class="gt-input" id="gt-url" placeholder="Đang chuẩn bị mô phỏng...">
   <div>
-    <span class="gt-lbl" style="display:block;margin-bottom:4px">Key nhiệm vụ (${isDirectGTraffic ? 'Direct Link' : 'Token ảnh'})</span>
+    <span class="gt-lbl" style="display:block;margin-bottom:4px">Key nhiệm vụ</span>
     <input class="gt-input" id="gt-key" value="${shortKey}" readonly>
   </div>
   <div class="gt-ctrls">
@@ -677,7 +687,23 @@
     <button class="gt-btn blue" id="gt-start">Lấy mã ngay</button>
     <button class="gt-btn gray" id="gt-pool">+Pool</button>
   </div>
-  <div class="gt-log" id="gt-log">Đang khởi tạo...</div>
+
+  <!-- CONSOLE LOG ĐẬM NỔI -->
+  <div class="gt-log" id="gt-log">Đang khởi tạo nhiệm vụ...</div>
+
+  <!-- WIDGET ĐẾM NGƯỢC CYBER -->
+  <div class="gt-countdown-box" id="gt-cd-box">
+    <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:2px">⏳ ĐANG GIỮ TAB & ĐẾM NGƯỢC</div>
+    <div class="gt-cd-num" id="gt-cd-num">60s</div>
+  </div>
+
+  <!-- VAULT MÃ HOÀN THÀNH CINEMATIC -->
+  <div class="gt-vault-card" id="gt-vault">
+    <div class="gt-vault-title">🏆 GIẢI MÃ THÀNH CÔNG 🏆</div>
+    <div class="gt-vault-code" id="gt-vault-code">******</div>
+    <div class="gt-vault-sub">✓ Đã copy vào Clipboard & Tự động điền form</div>
+  </div>
+
   <a class="gt-discord" href="${DISCORD_URL}" target="_blank">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
     Join Discord nhận bản cập nhật
@@ -818,12 +844,16 @@
   // BIND MASTER EVENTS
   // ===========================================================================
   function bindMasterEvents(hud, shortKey) {
-    const $id    = id => hud.querySelector("#" + id);
-    const badge  = $id("gt-badge");
-    const log    = $id("gt-log");
-    const urlIn  = $id("gt-url");
-    const keyIn  = $id("gt-key");
-    const autoCb = $id("gt-auto");
+    const $id     = id => hud.querySelector("#" + id);
+    const badge   = $id("gt-badge");
+    const log     = $id("gt-log");
+    const urlIn   = $id("gt-url");
+    const keyIn   = $id("gt-key");
+    const autoCb  = $id("gt-auto");
+    const cdBox   = $id("gt-cd-box");
+    const cdNum   = $id("gt-cd-num");
+    const vault   = $id("gt-vault");
+    const vaultCd = $id("gt-vault-code");
 
     const setBadge = (txt, cls="") => { badge.textContent = txt; badge.className = "gt-badge " + cls; };
     const setLog   = (txt, col="#38bdf8") => { log.textContent = txt; log.style.color = col; };
@@ -840,13 +870,35 @@
       setLog("🗑️ Đã xóa sạch Database Pool!");
     };
 
+    // =========================================================================
+    // HIỆU ỨNG GÕ PHÍM TỪNG KÝ TỰ (TYPEWRITER SIMULATION)
+    // =========================================================================
+    function typeDomainHumanLike(domain, onDone) {
+      urlIn.value = "";
+      setLog("⌨️ Đang giả lập gõ phím: " + domain, "#a78bfa");
+      setBadge("Giả lập gõ...", "info");
+
+      let idx = 0;
+      const typeTimer = setInterval(() => {
+        if (idx < domain.length) {
+          urlIn.value += domain[idx];
+          idx++;
+        } else {
+          clearInterval(typeTimer);
+          setLog("✨ Đã nhập xong domain: " + domain, "#22c55e");
+          setBadge("Đã nhập ✓", "ok");
+          setTimeout(() => onDone(sanitizeUrl(domain)), 600);
+        }
+      }, 70); // Gõ mỗi ký tự 70ms giống người thật
+    }
+
     // Tự động bấm nút "ĐỔI TỪ KHÓA MỚI" trên GTraffic nếu trang đích không có mã
     function triggerChangeTask() {
       for (const b of document.querySelectorAll("button, a, div[role='button']")) {
         const txt = b.innerText || b.textContent || "";
         if (/đổi\s*từ\s*khóa/i.test(txt)) {
           b.style.outline = "3px solid #ef4444";
-          setLog("🔄 Trang đích không có nút lấy mã! Đang tự động đổi từ khóa mới...", "#ef4444");
+          setLog("🔄 Trang đích không có nút G hợp lệ! Đang tự động đổi từ khóa mới...", "#ef4444");
           setTimeout(() => {
             b.click();
             setTimeout(() => {
@@ -860,32 +912,43 @@
       return false;
     }
 
-    // Lắng nghe cập nhật từ tab ngầm (đồng bộ số giây & điền mã & xử lý lỗi không có nút)
+    // Lắng nghe cập nhật từ tab ngầm (đồng bộ số giây, trạng thái cuộn, và mã)
     if (typeof GM_addValueChangeListener === "function") {
       GM_addValueChangeListener(KEY_PING, (_, __, v) => {
         if (!v || v.key !== keyIn.value) return;
 
-        // Nếu tab đích báo lỗi không có nút G
         if (v.error === "NO_BUTTON") {
           setBadge("Không có mã!", "err");
           setLog("⚠️ " + (v.message || "Trang đích không có nút lấy mã!"), "#ef4444");
+          cdBox.style.display = "none";
           triggerChangeTask();
           return;
         }
 
-        if (v.status === "CLICKED") {
-          setBadge("Đang kích hoạt...", "info");
-          setLog("🎯 Đã bấm nút Logo G! Đang chờ đếm giây...");
+        if (v.status === "SCROLLING") {
+          setBadge("Đang lướt...", "info");
+          setLog("📜 " + v.seconds);
+        } else if (v.status === "CLICKED") {
+          setBadge("Đã bấm nút G!", "info");
+          setLog("🎯 " + v.seconds);
         } else if (v.seconds !== undefined) {
           setBadge(`Đang ủ: ${v.seconds}s`, "info");
-          setLog(`⏳ Tab ngầm đếm ngược: ${v.seconds}s`);
+          setLog(`⏳ Tab ngầm đang đếm ngược: ${v.seconds}s`);
+          cdBox.style.display = "block";
+          cdNum.textContent = v.seconds + "s";
         }
       });
 
       GM_addValueChangeListener(KEY_DONE, (_, __, v) => {
         if (v && v.key === keyIn.value && v.code) {
           setBadge("Hoàn thành!", "ok");
-          setLog("🎉 Mã: [ " + v.code + " ]", "#22c55e");
+          setLog("🎉 Giải mã thành công: " + v.code, "#22c55e");
+          cdBox.style.display = "none";
+
+          // Hiển thị khung Vault Cinematic
+          vault.style.display = "block";
+          vaultCd.textContent = v.code;
+
           copyToClipboard(v.code);
           const inp = document.querySelector('input[placeholder*="mã" i], input[placeholder*="xác nhận" i], input[id*="code"], input[name*="code"], .form-control[type="text"]');
           if (inp) {
@@ -898,7 +961,7 @@
     }
 
     // =========================================================================
-    // NỀN TẢNG 1: DIRECT.GTRAFFIC.IO (Auto Leak Domain, No OCR)
+    // NỀN TẢNG 1: DIRECT.GTRAFFIC.IO (Auto Leak + Typewriter Simulation)
     // =========================================================================
     if (isDirectGTraffic) {
       keyIn.value = "direct_" + shortKey;
@@ -906,7 +969,7 @@
 
       function initDirectTask(force = false) {
         setBadge("Đang dò domain...", "info");
-        setLog("⚡ Đang trích xuất domain trực tiếp (không cần OCR)...");
+        setLog("⚡ Đang trích xuất domain từ Bước 1...");
 
         let attempts = 0;
         const poll = setInterval(() => {
@@ -914,16 +977,15 @@
           const domain = findDirectLeakedDomain();
           if (domain) {
             clearInterval(poll);
-            const finalUrl = sanitizeUrl(domain);
-            urlIn.value = finalUrl;
-            setBadge("Đã leak domain ✓", "ok");
-            setLog("⚡ Phát hiện domain: " + finalUrl);
+            // Kích hoạt hiệu ứng gõ phím người thật
+            typeDomainHumanLike(domain, finalUrl => {
+              urlIn.value = finalUrl;
+              const p = getPool();
+              p[keyIn.value] = { url: finalUrl, date: Date.now() };
+              savePool(p);
 
-            const p = getPool();
-            p[keyIn.value] = { url: finalUrl, date: Date.now() };
-            savePool(p);
-
-            if (autoCb.checked) setTimeout(doStart, 800);
+              if (autoCb.checked) setTimeout(doStart, 800);
+            });
           } else if (attempts >= 25) {
             clearInterval(poll);
             setBadge("Chưa thấy domain", "err");
@@ -946,7 +1008,7 @@
     }
 
     // =========================================================================
-    // NỀN TẢNG 2: GTRAFFIC.IO TIÊU CHUẨN (OCR AI Scanning)
+    // NỀN TẢNG 2: GTRAFFIC.IO TIÊU CHUẨN (OCR AI + Typewriter Simulation)
     // =========================================================================
     $id("gt-rescan").onclick = () => doScanStandard(true);
 
@@ -1063,7 +1125,7 @@
               setLog("❌ " + errMsg);
               return;
             }
-            setLog("✨ OCR xong! Đang bóc tách tên miền...");
+            setLog("✨ OCR xong! Đang phân tích domain...");
             handleOcrText(text, taskKey);
           } catch(e) {
             setBadge("Lỗi parse", "err");
@@ -1086,23 +1148,17 @@
         return;
       }
 
-      const finalUrl = sanitizeUrl(domain);
-      if (!finalUrl) {
-        setBadge("URL lỗi", "err");
-        setLog("⚠️ Domain bị lỗi ký tự: " + domain);
-        urlIn.value = domain;
-        return;
-      }
+      typeDomainHumanLike(domain, finalUrl => {
+        urlIn.value = finalUrl;
+        setBadge("Đã nhận diện ✓", "ok");
+        setLog("✅ Nhận diện thành công: " + finalUrl);
 
-      urlIn.value = finalUrl;
-      setBadge("Đã nhận diện ✓", "ok");
-      setLog("✅ Nhận diện thành công: " + finalUrl);
+        const p = getPool();
+        p[taskKey] = { url: finalUrl, date: Date.now() };
+        savePool(p);
 
-      const p = getPool();
-      p[taskKey] = { url: finalUrl, date: Date.now() };
-      savePool(p);
-
-      if (autoCb.checked) setTimeout(doStart, 900);
+        if (autoCb.checked) setTimeout(doStart, 900);
+      });
     }
 
     function extractStandardDomain(normalizedText, rawText) {
@@ -1150,8 +1206,8 @@
 
       urlIn.value = url;
       const currentKey = keyIn.value || "UNKNOWN";
-      setLog("🚀 Mở tab ngầm: " + url);
-      setBadge("Đang ủ...", "info");
+      setLog("🚀 Mở tab & bắt đầu lướt chuột người thật: " + url);
+      setBadge("Đang lướt...", "info");
 
       const p = getPool();
       p[currentKey] = { url: url, date: Date.now() };

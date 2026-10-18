@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GTraffic Bypass All-In-One (Duyzoz)
 // @namespace    https://gtraffic.io/
-// @version      3.2.0
-// @description  Bypass tự động 2 nền tảng: gtraffic.io (OCR AI nhận diện ảnh) & direct.gtraffic.io (Auto Leak Domain không cần OCR)
+// @version      3.3.0
+// @description  Bypass tự động 2 nền tảng: gtraffic.io & direct.gtraffic.io - Hỗ trợ Redirect domain, Smart click logo G mọi vị trí, tự động đổi nhiệm vụ nếu web lỗi
 // @match        https://gtraffic.io/*
 // @match        http://gtraffic.io/*
 // @match        https://*.gtraffic.io/*
@@ -28,13 +28,13 @@
 // ==/UserScript==
 
 /* =========================================================================
-   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.2.0
-   HỖ TRỢ SONG SONG CẢ 2 NỀN TẢNG:
-   1. direct.gtraffic.io: Tự động trích xuất Domain leak từ Bước 1, không cần OCR,
-      mở tab ngầm, chờ logo #avt-d-btn xuất hiện (delay 2-6s), tự động click,
-      đọc đếm ngược từ #trade-d-btn__content & tự động copy mã.
-   2. gtraffic.io: Tự động lấy ảnh Bước 2, gửi OCR AI nhận diện domain,
-      chống cache sai, lưu Pool theo Token ảnh.
+   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.3.0
+   CẬP NHẬT MỚI:
+   - FIX: Hỗ trợ Redirect tên miền (vd: luam.in -> 98win007.com) không bị ngắt script
+   - FIX: Dò tìm chuẩn xác Logo nút G ở MỌI VỊ TRÍ ngẫu nhiên trên trang
+   - FIX: Xử lý delay 2-6s, tự cuộn tới tọa độ & bắn toàn bộ chuỗi sự kiện click
+   - NEW: Tự động phát hiện nếu web đích không có nút G sau 12s -> báo lỗi và
+          TỰ ĐỘNG BẤM 'ĐỔI TỪ KHÓA MỚI' trên GTraffic!
    ========================================================================= */
 
 (function () {
@@ -50,25 +50,10 @@
   const KEY_PING     = "gtraffic_sync_ping";
   const KEY_DONE     = "gtraffic_sync_done";
 
-  const hostname           = window.location.hostname;
+  const hostname           = window.location.hostname.toLowerCase();
   const isDirectGTraffic   = /direct\.gtraffic\.io$/i.test(hostname);
   const isStandardGTraffic = /(?:^|\.)gtraffic\.io$/i.test(hostname) && !isDirectGTraffic;
   const isAnyGTraffic      = isDirectGTraffic || isStandardGTraffic;
-
-  // Dọn dẹp cache rác cũ nếu có
-  (function purgeBadCache() {
-    try {
-      const p = GM_getValue(KEY_POOL, {});
-      let changed = false;
-      for (const k in p) {
-        if (k === "85D67QK" || (p[k] && p[k].url && p[k].url.includes("entasymercadeo"))) {
-          delete p[k];
-          changed = true;
-        }
-      }
-      if (changed) GM_setValue(KEY_POOL, p);
-    } catch (_) {}
-  })();
 
   // ===========================================================================
   // UTILS
@@ -118,8 +103,8 @@
   }
 
   // ===========================================================================
-  // ★ TARGET WEBSITE AGENT (chạy trong tab ngầm của trang đích)
-  //   Hỗ trợ cả nút của gtraffic chuẩn (#avt-btn) & direct (#avt-d-btn / #trade-d-btn)
+  // ★ TARGET WEBSITE AGENT (chạy trong tab đích)
+  //   HỖ TRỢ REDIRECT & DÒ TÌM NÚT G MỌI VỊ TRÍ
   // ===========================================================================
   if (!isAnyGTraffic) {
     let session = null;
@@ -127,18 +112,37 @@
       session = GM_getValue(KEY_SESSION, null);
     } catch (_) { return; }
 
+    // Nếu không có phiên chờ lấy mã hoặc phiên quá 5 phút -> thoát ngay
     if (!session || !session.targetUrl || !session.key) return;
-    if (Date.now() - (session.ts || 0) > 600000) return;
+    if (Date.now() - (session.ts || 0) > 300000) return;
 
+    // Danh sách các trang web tuyệt đối không can thiệp
+    const IGNORED_HOSTS = [
+      "google.com", "google.com.vn", "youtube.com", "facebook.com",
+      "discord.com", "discord.gg", "github.com", "gtraffic.io"
+    ];
+    if (IGNORED_HOSTS.some(h => hostname.endsWith(h))) return;
+
+    // HỖ TRỢ REDIRECT:
+    // Kiểm tra xem trang hiện tại có khớp hostname hoặc được mở trong vòng 45s của phiên không
+    let isTarget = false;
     try {
       const targetHost = new URL(session.targetUrl).hostname.replace(/^www\./, "").toLowerCase();
-      const currentHost = window.location.hostname.replace(/^www\./, "").toLowerCase();
-      if (!currentHost.includes(targetHost) && !targetHost.includes(currentHost)) {
-        return;
+      const currentHost = hostname.replace(/^www\./, "");
+      if (currentHost.includes(targetHost) || targetHost.includes(currentHost)) {
+        isTarget = true;
       }
-    } catch (_) {
-      return;
+    } catch (_) {}
+
+    // Nếu không trùng domain gốc, nhưng phiên vừa tạo dưới 45 giây -> Đây là trang được Redirect tới!
+    if (!isTarget && (Date.now() - (session.ts || 0) < 45000)) {
+      isTarget = true;
+      // Cập nhật URL đã redirect vào session
+      session.redirectedUrl = window.location.href;
+      GM_setValue(KEY_SESSION, session);
     }
+
+    if (!isTarget) return;
 
     // 1. Fake Google Referrer
     try {
@@ -163,38 +167,54 @@
     window.requestAnimationFrame = cb => window.setTimeout(() => cb(performance.now()), 16);
     window.cancelAnimationFrame  = id => window.clearTimeout(id);
 
-    // 3. Khởi chạy agent tự động click nút & đồng bộ countdown
+    // 3. Khởi chạy agent tự động click nút
     waitForBody(() => runTargetAgent());
     return;
   }
 
   // ===========================================================================
-  // TARGET AGENT LOGIC (với xử lý delay 2-6s cho logo direct)
+  // TARGET AGENT LOGIC (Dò tìm nút G ở mọi vị trí + Tự báo lỗi nếu không có nút)
   // ===========================================================================
   function runTargetAgent() {
     let hasClicked = false;
-    let clickAttempts = 0;
+    let clickCount = 0;
     let lastSec = null;
     let codeExtracted = false;
+    let searchSeconds = 0;
 
+    // HÀM DÒ TÌM NÚT G THÔNG MINH Ở MỌI VỊ TRÍ TRÊN TRANG
     function findTargetButton() {
-      // 1. Nút của direct.gtraffic: #avt-d-btn (svg) hoặc #trade-d-btn
-      const directSvg = document.querySelector("#avt-d-btn")
-                     || document.querySelector(".logo-dr-svg-us")
-                     || document.querySelector("#trade-d-btn_arrow");
+      // 1. ID & Class chuẩn của Direct GTraffic & Standard GTraffic
+      const directSvg = document.querySelector("#avt-d-btn, svg.logo-dr-svg-us, #trade-d-btn_arrow");
       if (directSvg) return directSvg;
 
-      const directContainer = document.querySelector("#trade-d-btn")
-                           || document.querySelector(".trade-d-btn-container");
-      if (directContainer) return directContainer;
+      const directBox = document.querySelector("#trade-d-btn, .trade-d-btn-container, .trade-d-btn");
+      if (directBox) return directBox;
 
-      // 2. Nút của gtraffic tiêu chuẩn: #avt-btn
-      const stdBtn = document.querySelector("#avt-btn")
-                  || document.querySelector('[class*="avt-btn"]')
-                  || document.querySelector("#trade-btn");
+      const stdBtn = document.querySelector("#avt-btn, [class*='avt-btn'], #trade-btn");
       if (stdBtn) return stdBtn;
 
-      // 3. Nút chữ LẤY MÃ
+      // 2. Quét thẻ SVG có chứa hình tròn màu cam/đỏ (#E5572D / #E3572D) hoặc chữ "g"
+      for (const svg of document.querySelectorAll("svg")) {
+        const txt = (svg.textContent || "").trim();
+        if (txt === "g" || txt.startsWith("g")) return svg;
+        const circle = svg.querySelector("circle");
+        if (circle) {
+          const fill = (circle.getAttribute("fill") || "").toUpperCase();
+          if (fill.includes("E5572D") || fill.includes("E3572D") || fill.includes("E5") || fill.includes("E3")) {
+            return svg;
+          }
+        }
+      }
+
+      // 3. Quét quanh khu vực nhúng mã btd.js
+      const btdScript = document.querySelector('script[src*="btd.js"], script[src*="mammon-arrived"]');
+      if (btdScript && btdScript.parentElement) {
+        const nearby = btdScript.parentElement.querySelector('svg, div[id*="trade"], div[id*="btn"]');
+        if (nearby) return nearby;
+      }
+
+      // 4. Tìm thẻ bất kỳ có chữ "LẤY MÃ"
       for (const el of document.querySelectorAll("button, a, div[role='button'], div, span")) {
         const txt = el.innerText || el.textContent || "";
         if (/lấy\s*mã/i.test(txt) && el.children.length <= 2) {
@@ -206,47 +226,59 @@
       return null;
     }
 
-    function triggerClick(el) {
+    // HÀM CLICK THÔNG MINH MỌI TẦNG ELEMENT
+    function smartClickButton(target) {
+      const elementsToClick = new Set();
+      elementsToClick.add(target);
+      if (target.parentElement) elementsToClick.add(target.parentElement);
+      
+      const box = target.closest("#trade-d-btn, .trade-d-btn-container, [id*='trade']");
+      if (box) elementsToClick.add(box);
+
+      const arrow = document.querySelector("#trade-d-btn_arrow");
+      if (arrow) elementsToClick.add(arrow);
+
+      const svg = document.querySelector("#avt-d-btn, svg.logo-dr-svg-us");
+      if (svg) elementsToClick.add(svg);
+
+      // Cuộn trang mượt vào giữa màn hình
       try {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.scrollIntoView({ behavior: "instant", block: "center" });
       } catch (_) {}
 
       try {
-        el.style.outline = "4px solid #22c55e";
+        target.style.outline = "4px solid #22c55e";
       } catch (_) {}
 
-      const r = el.getBoundingClientRect();
+      const r = target.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
 
-      const eventOpts = {
+      const eventInit = {
         view: window,
         bubbles: true,
         cancelable: true,
         clientX: cx,
         clientY: cy,
+        screenX: cx + window.screenX,
+        screenY: cy + window.screenY,
         button: 0,
         buttons: 1
       };
 
-      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(type => {
-        try { el.dispatchEvent(new MouseEvent(type, eventOpts)); } catch (_) {}
-      });
-
-      // Bắn thêm vào phần tử cha nếu là SVG
-      if (el.parentElement) {
-        ["mousedown", "mouseup", "click"].forEach(type => {
-          try { el.parentElement.dispatchEvent(new MouseEvent(type, eventOpts)); } catch (_) {}
+      elementsToClick.forEach(node => {
+        if (!node) return;
+        ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(evtName => {
+          try { node.dispatchEvent(new MouseEvent(evtName, eventInit)); } catch (_) {}
         });
-      }
-
-      if (typeof el.click === "function") {
-        try { el.click(); } catch (_) {}
-      }
+        if (typeof node.click === "function") {
+          try { node.click(); } catch (_) {}
+        }
+      });
     }
 
     function extractCountdown() {
-      // 1. Thẻ text SVG của direct.gtraffic: #trade-d-btn__content
+      // 1. Thẻ SVG content của direct
       const directContent = document.querySelector("#trade-d-btn__content");
       if (directContent) {
         const txt = (directContent.textContent || directContent.innerHTML || "").trim();
@@ -262,7 +294,7 @@
         if (m && +m[1] > 0 && +m[1] <= 180) return +m[1];
       }
 
-      // 3. Quét mọi phần tử đếm ngược
+      // 3. Quét phần tử có định dạng số đếm lùi
       for (const el of document.querySelectorAll('[class*="timer"], [class*="countdown"], [id*="count"], .countdown, #notice-d-btn, #trade-d-btn')) {
         const txt = el.innerText || el.textContent || "";
         const m = txt.match(/\b(\d{1,3})\s*(?:s|giây|sec)?\b/i);
@@ -273,64 +305,66 @@
     }
 
     function extractSecretCode() {
-      // 1. Class chuẩn .copy-allowed
       const codeEl = document.querySelector('.copy-allowed, [class*="copy-allowed"]');
       if (codeEl) {
         const code = (codeEl.textContent || codeEl.innerText || "").replace(/\s+/g, "").trim();
-        if (code.length >= 4 && !/^\d{1,2}$/.test(code)) {
-          try { codeEl.style.backgroundColor = "#22c55e"; codeEl.style.color = "#fff"; } catch (_) {}
-          return code;
-        }
+        if (code.length >= 4 && !/^\d{1,2}$/.test(code)) return code;
       }
 
-      // 2. Thẻ #trade-d-btn__content khi đổi thành mã
       const directContent = document.querySelector("#trade-d-btn__content");
       if (directContent) {
         const txt = (directContent.textContent || "").replace(/\s+/g, "").trim();
-        if (txt.length >= 4 && !/^\d{1,3}$/.test(txt)) {
-          return txt;
-        }
+        if (txt.length >= 4 && !/^\d{1,3}$/.test(txt)) return txt;
       }
 
-      // 3. Thẻ #notice-d-btn
       const noticeEl = document.querySelector("#notice-d-btn");
       if (noticeEl) {
         const txt = (noticeEl.innerText || noticeEl.textContent || "").replace(/\s+/g, "").trim();
-        if (txt.length >= 4 && !/^\d{1,3}$/.test(txt) && !/đang|chờ|vui lòng/i.test(txt)) {
-          return txt;
-        }
+        if (txt.length >= 4 && !/^\d{1,3}$/.test(txt) && !/đang|chờ|vui lòng/i.test(txt)) return txt;
       }
 
       return null;
     }
 
-    // Polling liên tục mỗi 400ms: đợi 2-6s cho đến khi nút xuất hiện
+    // Polling mỗi 400ms: Dò tìm nút, click và theo dõi tiến độ
     const loop = setInterval(() => {
       const session = GM_getValue(KEY_SESSION, null);
       if (!session || !session.key) return;
 
-      // 1. Tự động click khi logo xuất hiện
-      if (!hasClicked || (clickAttempts < 5 && lastSec === null)) {
+      searchSeconds += 0.4;
+
+      // 1. Dò tìm và click nút
+      if (!hasClicked || (clickCount < 6 && lastSec === null)) {
         const btn = findTargetButton();
         if (btn && btn.isConnected) {
           const style = window.getComputedStyle(btn);
           const isVisible = style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
           if (isVisible) {
-            triggerClick(btn);
-            clickAttempts++;
-            if (clickAttempts >= 1) hasClicked = true;
+            smartClickButton(btn);
+            clickCount++;
+            hasClicked = true;
+            // Báo về tab mẹ là đã phát hiện và click nút
+            GM_setValue(KEY_PING, { key: session.key, status: "CLICKED", seconds: "Đang kích hoạt...", ts: Date.now() });
           }
         }
       }
 
-      // 2. Đồng bộ thời gian đếm ngược
+      // 2. Đọc thời gian đếm ngược
       const sec = extractCountdown();
       if (sec !== null && sec !== lastSec) {
         lastSec = sec;
         GM_setValue(KEY_PING, { key: session.key, seconds: sec, ts: Date.now() });
       }
 
-      // 3. Lấy mã khi hoàn thành
+      // 3. Sau 12 giây nếu hoàn toàn không có nút G và không đếm giây -> Báo lỗi để GTraffic đổi từ khóa!
+      if (!hasClicked && searchSeconds >= 12 && lastSec === null) {
+        clearInterval(loop);
+        GM_setValue(KEY_PING, { key: session.key, error: "NO_BUTTON", message: "Không tìm thấy nút lấy mã trên website này!", ts: Date.now() });
+        setTimeout(() => { try { window.close(); } catch (_) {} }, 2500);
+        return;
+      }
+
+      // 4. Lấy mã khi đếm xong
       if (!codeExtracted) {
         const code = extractSecretCode();
         if (code) {
@@ -385,7 +419,6 @@
 
     const pathMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
     const shortKey  = pathMatch ? pathMatch[1] : "UNKNOWN";
-
     const titlePrefix = isDirectGTraffic ? "direct.gtraffic" : "gtraffic";
 
     const styleId = "gtraffic-hud-style";
@@ -448,7 +481,7 @@
   font-weight: 700 !important;
   padding: 3px 10px !important;
   border-radius: 20px !important;
-  max-width: 165px !important;
+  max-width: 175px !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
@@ -684,9 +717,7 @@
   // DOMAIN EXTRACTORS
   // ===========================================================================
 
-  // 1. Dành riêng cho direct.gtraffic.io: Trích xuất trực tiếp từ DOM không cần OCR
   function findDirectLeakedDomain() {
-    // a. Trực tiếp từ thẻ span.notranslate.break-all (theo DevTools)
     const span = document.querySelector('span.notranslate.break-all')
               || document.querySelector('.notranslate.break-all')
               || document.querySelector('span.font-mono.break-all');
@@ -697,7 +728,6 @@
       }
     }
 
-    // b. Tìm trong khối Bước 1
     for (const el of document.querySelectorAll("div, section, p, h2, h3, h4")) {
       const txt = el.innerText || "";
       if (/bước\s*0?1/i.test(txt)) {
@@ -709,7 +739,6 @@
       }
     }
 
-    // c. Quét thẻ bất kỳ có định dạng domain
     for (const el of document.querySelectorAll("span, b, strong, div")) {
       const txt = (el.innerText || el.textContent || "").trim();
       if (/^[a-zA-Z0-9][a-zA-Z0-9_\-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/.test(txt)) {
@@ -722,7 +751,6 @@
     return null;
   }
 
-  // 2. Dành cho gtraffic.io tiêu chuẩn: Tìm ảnh nhiệm vụ
   function findTaskImage() {
     const selectors = [
       'img[alt*="tim kiem" i]',
@@ -812,20 +840,53 @@
       setLog("🗑️ Đã xóa sạch Database Pool!");
     };
 
-    // Lắng nghe cập nhật từ tab ngầm (đồng bộ số giây & điền mã)
+    // Tự động bấm nút "ĐỔI TỪ KHÓA MỚI" trên GTraffic nếu trang đích không có mã
+    function triggerChangeTask() {
+      for (const b of document.querySelectorAll("button, a, div[role='button']")) {
+        const txt = b.innerText || b.textContent || "";
+        if (/đổi\s*từ\s*khóa/i.test(txt)) {
+          b.style.outline = "3px solid #ef4444";
+          setLog("🔄 Trang đích không có nút lấy mã! Đang tự động đổi từ khóa mới...", "#ef4444");
+          setTimeout(() => {
+            b.click();
+            setTimeout(() => {
+              urlIn.value = "";
+              if (isDirectGTraffic) initDirectTask(true);
+            }, 1200);
+          }, 1500);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Lắng nghe cập nhật từ tab ngầm (đồng bộ số giây & điền mã & xử lý lỗi không có nút)
     if (typeof GM_addValueChangeListener === "function") {
       GM_addValueChangeListener(KEY_PING, (_, __, v) => {
-        if (v && v.key === keyIn.value) {
+        if (!v || v.key !== keyIn.value) return;
+
+        // Nếu tab đích báo lỗi không có nút G
+        if (v.error === "NO_BUTTON") {
+          setBadge("Không có mã!", "err");
+          setLog("⚠️ " + (v.message || "Trang đích không có nút lấy mã!"), "#ef4444");
+          triggerChangeTask();
+          return;
+        }
+
+        if (v.status === "CLICKED") {
+          setBadge("Đang kích hoạt...", "info");
+          setLog("🎯 Đã bấm nút Logo G! Đang chờ đếm giây...");
+        } else if (v.seconds !== undefined) {
           setBadge(`Đang ủ: ${v.seconds}s`, "info");
           setLog(`⏳ Tab ngầm đếm ngược: ${v.seconds}s`);
         }
       });
+
       GM_addValueChangeListener(KEY_DONE, (_, __, v) => {
         if (v && v.key === keyIn.value && v.code) {
           setBadge("Hoàn thành!", "ok");
           setLog("🎉 Mã: [ " + v.code + " ]", "#22c55e");
           copyToClipboard(v.code);
-          // Tự động điền mã vào ô xác nhận
           const inp = document.querySelector('input[placeholder*="mã" i], input[placeholder*="xác nhận" i], input[id*="code"], input[name*="code"], .form-control[type="text"]');
           if (inp) {
             inp.value = v.code;
@@ -863,7 +924,7 @@
             savePool(p);
 
             if (autoCb.checked) setTimeout(doStart, 800);
-          } else if (attempts >= 25) { // Quét trong 10 giây
+          } else if (attempts >= 25) {
             clearInterval(poll);
             setBadge("Chưa thấy domain", "err");
             setLog("⚠️ Không tìm thấy domain leak tự động. Hãy nhập link tay!");
@@ -871,7 +932,6 @@
         }, 400);
       }
 
-      // Kiểm tra pool hoặc khởi chạy
       const pool = getPool();
       const directKey = "direct_" + shortKey;
       if (pool[directKey]?.url) {

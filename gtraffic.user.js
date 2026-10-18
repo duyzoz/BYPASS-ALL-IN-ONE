@@ -1,12 +1,16 @@
 // ==UserScript==
-// @name         GTraffic Bypass All-In-One (Duyzoz)
+// @name         GTraffic & TrafficSo1 Bypass All-In-One (Duyzoz)
 // @namespace    https://gtraffic.io/
-// @version      3.4.0
-// @description  Bypass 2 nền tảng: gtraffic.io & direct.gtraffic.io - Giả lập gõ phím & lướt trang người thật, Auto Click Logo G đỏ, Đếm ngược & Giao diện Cinematic siêu đẹp
+// @version      3.5.0
+// @description  Bypass 3 nền tảng: gtraffic.io, direct.gtraffic.io & trafficso1.com - Giả lập gõ phím & lướt trang người thật, Auto Click Logo G Đỏ/Xanh, Đếm ngược & Cyber Vault
 // @match        https://gtraffic.io/*
 // @match        http://gtraffic.io/*
 // @match        https://*.gtraffic.io/*
 // @match        http://*.gtraffic.io/*
+// @match        https://trafficso1.com/*
+// @match        http://trafficso1.com/*
+// @match        https://*.trafficso1.com/*
+// @match        http://*.trafficso1.com/*
 // @match        *://*/*
 // @run-at       document-start
 // @icon         https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/assets/icon.png
@@ -28,16 +32,13 @@
 // ==/UserScript==
 
 /* =========================================================================
-   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.4.0 CINEMATIC
-   - GIẢ LẬP NGƯỜI THẬT:
-     1. Gõ tên miền từng chữ (Typewriter effect) mô phỏng gõ tay.
-     2. Khi tab đích mở ra: Lướt chuột mượt (Smooth human scroll) từng đoạn xuống bài
-        kèm phát sinh sự kiện di chuột ngẫu nhiên (mousemove) để vượt cơ chế chống bot.
-     3. Đợi nút Logo G đỏ hiển thị chuẩn xác (tránh bị cấp G xanh spam).
-     4. Tự động click, giữ tab 60 FPS, đồng bộ đếm giây.
-     5. Tự động đổi nhiệm vụ (bấm 'ĐỔI TỪ KHÓA MỚI') nếu web đích không có nút G.
-   - GIAO DIỆN CINEMATIC:
-     Khung đếm ngược neon phát sáng, Cyberpunk Vault hiển thị mã cực ngầu!
+   GTraffic & TrafficSo1 Bypass All-In-One (Duyzoz Edition) - v3.5.0
+   HỖ TRỢ SONG SONG 3 NỀN TẢNG:
+   1. trafficso1.com: Nhận diện ảnh CDN, OCR AI ghép từ khóa thông minh (vd: Fun88 Yoko),
+      giả lập gõ phím, lướt trang mượt, tự click nút G Xanh/Đỏ.
+   2. direct.gtraffic.io: Tự động trích xuất Domain leak từ Bước 1, không cần OCR,
+      mở tab ngầm, tự động cuộn tìm logo #avt-d-btn / #trade-d-btn.
+   3. gtraffic.io: Quét ảnh Bước 2, gửi OCR AI nhận diện domain, lưu Pool.
    ========================================================================= */
 
 (function () {
@@ -54,9 +55,10 @@
   const KEY_DONE     = "gtraffic_sync_done";
 
   const hostname           = window.location.hostname.toLowerCase();
+  const isTrafficSo1       = /(?:^|\.)trafficso1\.com$/i.test(hostname);
   const isDirectGTraffic   = /direct\.gtraffic\.io$/i.test(hostname);
   const isStandardGTraffic = /(?:^|\.)gtraffic\.io$/i.test(hostname) && !isDirectGTraffic;
-  const isAnyGTraffic      = isDirectGTraffic || isStandardGTraffic;
+  const isMasterPage       = isTrafficSo1 || isDirectGTraffic || isStandardGTraffic;
 
   // ===========================================================================
   // UTILS
@@ -106,10 +108,10 @@
   }
 
   // ===========================================================================
-  // ★ TARGET WEBSITE AGENT (chạy trong tab đích)
-  //   MÔ PHỎNG LƯỚT CHUỘT NGƯỜI THẬT + DÒ NÚT G ĐỎ
+  // ★ TARGET WEBSITE AGENT (chạy trong tab đích lấy mã)
+  //   MÔ PHỎNG LƯỚT CHUỘT NGƯỜI THẬT + DÒ NÚT G ĐỎ/XANH
   // ===========================================================================
-  if (!isAnyGTraffic) {
+  if (!isMasterPage) {
     let session = null;
     try {
       session = GM_getValue(KEY_SESSION, null);
@@ -120,7 +122,7 @@
 
     const IGNORED_HOSTS = [
       "google.com", "google.com.vn", "youtube.com", "facebook.com",
-      "discord.com", "discord.gg", "github.com", "gtraffic.io"
+      "discord.com", "discord.gg", "github.com", "gtraffic.io", "trafficso1.com"
     ];
     if (IGNORED_HOSTS.some(h => hostname.endsWith(h))) return;
 
@@ -171,7 +173,7 @@
   }
 
   // ===========================================================================
-  // TARGET AGENT LOGIC (LƯỚT TRANG NGƯỜI THẬT + CLICK NÚT G + AUTO ĐỔI TASK)
+  // TARGET AGENT LOGIC (LƯỚT TRANG NGƯỜI THẬT + CLICK NÚT G ĐỎ/XANH + AUTO ĐỔI TASK)
   // ===========================================================================
   function runTargetAgent(session) {
     let hasClicked = false;
@@ -179,42 +181,44 @@
     let lastSec = null;
     let codeExtracted = false;
 
-    // Tìm nút G thật (chỉ nhận diện nút cam/đỏ, bỏ qua nút xanh giả)
+    // Tìm nút G thật (Hỗ trợ cả G Đỏ/Cam và G Xanh lá)
     function findRealGButton() {
-      // 1. Selector Direct & Standard
-      const directSvg = document.querySelector("#avt-d-btn, svg.logo-dr-svg-us, #trade-d-btn_arrow");
-      if (directSvg) return directSvg;
+      // 1. Selector ID & Class chuẩn của Direct GTraffic & Standard & TrafficSo1
+      const selectors = [
+        '#avt-d-btn', '#avt-btn', 'svg.logo-dr-svg-us',
+        '#trade-d-btn', '#trade-d-btn_arrow', '#trade-btn',
+        '.trade-d-btn-container', '.trade-d-btn', '[class*="avt-btn"]'
+      ];
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el && el.isConnected) return el;
+      }
 
-      const directBox = document.querySelector("#trade-d-btn, .trade-d-btn-container, .trade-d-btn");
-      if (directBox) return directBox;
-
-      const stdBtn = document.querySelector("#avt-btn, [class*='avt-btn'], #trade-btn");
-      if (stdBtn) return stdBtn;
-
-      // 2. Quét SVG có chữ "g" hoặc vòng tròn cam/đỏ (#E5572D / #E3572D)
+      // 2. Quét SVG có chữ "g"/"G" hoặc hình tròn màu cam/đỏ/xanh lá
       for (const svg of document.querySelectorAll("svg")) {
-        const txt = (svg.textContent || "").trim();
+        const txt = (svg.textContent || "").trim().toLowerCase();
         if (txt === "g" || txt.startsWith("g")) return svg;
         const circle = svg.querySelector("circle");
         if (circle) {
           const fill = (circle.getAttribute("fill") || "").toUpperCase();
-          if (fill.includes("E5572D") || fill.includes("E3572D") || fill.includes("E5") || fill.includes("E3")) {
+          // Hỗ trợ mọi mã màu: Đỏ/Cam (#E5572D, #E3572D) & Xanh lá (#22C55E, #10B981, #00A651, #4ADE80)
+          if (/E5|E3|22C|10B|00A|4AD|GREEN|RED|ORANGE/i.test(fill)) {
             return svg;
           }
         }
       }
 
       // 3. Khu vực chứa script btd.js
-      const btdScript = document.querySelector('script[src*="btd.js"], script[src*="mammon-arrived"]');
+      const btdScript = document.querySelector('script[src*="btd.js"], script[src*="mammon-arrived"], script[src*="traffic"]');
       if (btdScript && btdScript.parentElement) {
         const nearby = btdScript.parentElement.querySelector('svg, div[id*="trade"], div[id*="btn"]');
         if (nearby) return nearby;
       }
 
-      // 4. Thẻ có chữ "LẤY MÃ"
+      // 4. Thẻ có chữ "LẤY MÃ" / "GET CODE"
       for (const el of document.querySelectorAll("button, a, div[role='button'], div, span")) {
         const txt = el.innerText || el.textContent || "";
-        if (/lấy\s*mã/i.test(txt) && el.children.length <= 2) {
+        if (/(?:lấy\s*mã|get\s*code|lấy\s*pass)/i.test(txt) && el.children.length <= 2) {
           const rect = el.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) return el;
         }
@@ -315,7 +319,7 @@
     }
 
     // =========================================================================
-    // TUYỆT KỸ: MÔ PHỎNG NGƯỜI THẬT LƯỚT CHUỘT XUỐNG DƯỚI BÀI VIẾT
+    // MÔ PHỎNG LƯỚT CHUỘT NGƯỜI THẬT XUỐNG DƯỚI BÀI VIẾT
     // =========================================================================
     function startHumanScrollingSimulation(onFoundOrEnd) {
       GM_setValue(KEY_PING, { key: session.key, status: "SCROLLING", seconds: "Đang lướt đọc bài...", ts: Date.now() });
@@ -333,12 +337,11 @@
 
         window.scrollTo({ top: currentY, behavior: "smooth" });
 
-        // Giả lập di chuyển chuột (mousemove) ngẫu nhiên
+        // Giả lập di chuyển chuột ngẫu nhiên
         const rx = Math.floor(Math.random() * (window.innerWidth - 80)) + 40;
         const ry = Math.floor(Math.random() * (window.innerHeight - 80)) + 40;
         window.dispatchEvent(new MouseEvent("mousemove", { clientX: rx, clientY: ry, bubbles: true }));
 
-        // Kiểm tra xem nút G đỏ đã xuất hiện chưa
         const btn = findRealGButton();
         if (btn && btn.isConnected) {
           const style = window.getComputedStyle(btn);
@@ -349,7 +352,6 @@
           }
         }
 
-        // Đã cuộn hết trang hoặc quá 14 lần cuộn (~6 giây)
         if (currentY >= pageHeight - 150 || totalTicks >= 14) {
           clearInterval(scrollInterval);
           setTimeout(() => onFoundOrEnd(findRealGButton()), 800);
@@ -360,7 +362,6 @@
     // Bắt đầu mô phỏng lướt trang sau khi load 600ms
     setTimeout(() => {
       startHumanScrollingSimulation(btn => {
-        // Vòng lặp theo dõi & kích hoạt nút
         let attempts = 0;
         const mainLoop = setInterval(() => {
           attempts++;
@@ -370,17 +371,15 @@
             smartClickButton(targetBtn);
             clickCount++;
             hasClicked = true;
-            GM_setValue(KEY_PING, { key: session.key, status: "CLICKED", seconds: "Đã bấm nút G!", ts: Date.now() });
+            GM_setValue(KEY_PING, { key: session.key, status: "CLICKED", seconds: "Đã bấm Logo G!", ts: Date.now() });
           }
 
-          // Theo dõi đếm ngược
           const sec = extractCountdown();
           if (sec !== null && sec !== lastSec) {
             lastSec = sec;
             GM_setValue(KEY_PING, { key: session.key, seconds: sec, ts: Date.now() });
           }
 
-          // Lấy mã khi có
           if (!codeExtracted) {
             const code = extractSecretCode();
             if (code) {
@@ -406,11 +405,11 @@
   }
 
   // ===========================================================================
-  // ★ MASTER PAGE MODE (gtraffic.io & direct.gtraffic.io)
+  // ★ MASTER PAGE MODE (trafficso1.com, gtraffic.io, direct.gtraffic.io)
   // ===========================================================================
 
   function tryMount() {
-    if (!isAnyGTraffic) return;
+    if (!isMasterPage) return;
     if (document.getElementById("gtraffic-hud-container")) return;
     const parent = document.body || document.documentElement;
     if (!parent) return;
@@ -434,7 +433,7 @@
   })();
 
   setInterval(() => {
-    if (isAnyGTraffic && !document.getElementById("gtraffic-hud-container")) tryMount();
+    if (isMasterPage && !document.getElementById("gtraffic-hud-container")) tryMount();
   }, 1000);
 
   // ===========================================================================
@@ -443,9 +442,12 @@
   function mountHud() {
     if (document.getElementById("gtraffic-hud-container")) return;
 
-    const pathMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
-    const shortKey  = pathMatch ? pathMatch[1] : "UNKNOWN";
-    const titlePrefix = isDirectGTraffic ? "direct.gtraffic" : "gtraffic";
+    const pathMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_\-\/]+)/);
+    const shortKey  = pathMatch ? pathMatch[1].replace(/[^a-zA-Z0-9]/g, "") : "UNKNOWN";
+    
+    let titlePrefix = "gtraffic";
+    if (isTrafficSo1) titlePrefix = "trafficso1";
+    else if (isDirectGTraffic) titlePrefix = "direct.gtraffic";
 
     const styleId = "gtraffic-hud-style";
     if (!document.getElementById(styleId)) {
@@ -453,8 +455,6 @@
       style.id = styleId;
       style.textContent = `
 @keyframes gt-pulse-glow { 0%,100% { box-shadow: 0 0 15px rgba(56,189,248,.35), 0 16px 36px rgba(0,0,0,.85); } 50% { box-shadow: 0 0 26px rgba(56,189,248,.65), 0 18px 40px rgba(0,0,0,.95); } }
-@keyframes gt-spin { to { transform: rotate(360deg); } }
-@keyframes gt-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes gt-pop { 0% { transform: scale(.8); opacity:0; } 70% { transform: scale(1.05); } 100% { transform: scale(1); opacity:1; } }
 
 #gtraffic-hud-container {
@@ -560,7 +560,6 @@
 .gt-btn.blue:hover { transform: translateY(-1px) !important; box-shadow: 0 0 18px rgba(2,132,199,.6) !important; }
 .gt-btn.gray { background: #1e293b !important; border: 1px solid #334155 !important; color: #f1f5f9 !important; }
 
-/* BẢNG CONSOLE TRẠNG THÁI CHỮ NỔI ĐẬM */
 .gt-log {
   background: #020617 !important;
   border: 1px solid rgba(56, 189, 248, 0.22) !important;
@@ -578,7 +577,6 @@
   text-shadow: 0 0 6px rgba(56,189,248,.35) !important;
 }
 
-/* WIDGET ĐẾM NGƯỢC LỚN ĐẬM CHẤT CYBER */
 .gt-countdown-box {
   display: none;
   background: linear-gradient(135deg, rgba(2,6,23,.9), rgba(15,23,42,.9)) !important;
@@ -586,7 +584,6 @@
   border-radius: 10px !important;
   padding: 8px 12px !important;
   text-align: center !important;
-  margin-top: 2px !important;
   box-shadow: 0 0 16px rgba(56,189,248,.3) inset !important;
 }
 .gt-cd-num {
@@ -598,7 +595,6 @@
   letter-spacing: 2px !important;
 }
 
-/* KHUNG MÃ CINEMATIC SIÊU ĐẸP KHI HOÀN THÀNH */
 .gt-vault-card {
   display: none;
   background: linear-gradient(135deg, #064e3b 0%, #022c22 100%) !important;
@@ -688,16 +684,13 @@
     <button class="gt-btn gray" id="gt-pool">+Pool</button>
   </div>
 
-  <!-- CONSOLE LOG ĐẬM NỔI -->
   <div class="gt-log" id="gt-log">Đang khởi tạo nhiệm vụ...</div>
 
-  <!-- WIDGET ĐẾM NGƯỢC CYBER -->
   <div class="gt-countdown-box" id="gt-cd-box">
     <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:2px">⏳ ĐANG GIỮ TAB & ĐẾM NGƯỢC</div>
     <div class="gt-cd-num" id="gt-cd-num">60s</div>
   </div>
 
-  <!-- VAULT MÃ HOÀN THÀNH CINEMATIC -->
   <div class="gt-vault-card" id="gt-vault">
     <div class="gt-vault-title">🏆 GIẢI MÃ THÀNH CÔNG 🏆</div>
     <div class="gt-vault-code" id="gt-vault-code">******</div>
@@ -759,7 +752,7 @@
       if (/bước\s*0?1/i.test(txt)) {
         const parent = el.parentElement || el;
         const m = parent.innerText.match(/([a-zA-Z0-9][a-zA-Z0-9_\-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)/);
-        if (m && !m[1].includes("gtraffic") && !m[1].includes("google")) {
+        if (m && !m[1].includes("gtraffic") && !m[1].includes("trafficso1") && !m[1].includes("google")) {
           return m[1];
         }
       }
@@ -768,7 +761,7 @@
     for (const el of document.querySelectorAll("span, b, strong, div")) {
       const txt = (el.innerText || el.textContent || "").trim();
       if (/^[a-zA-Z0-9][a-zA-Z0-9_\-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/.test(txt)) {
-        if (!txt.includes("gtraffic") && !txt.includes("google") && !txt.includes("recaptcha")) {
+        if (!txt.includes("gtraffic") && !txt.includes("trafficso1") && !txt.includes("google") && !txt.includes("recaptcha")) {
           return txt;
         }
       }
@@ -870,9 +863,7 @@
       setLog("🗑️ Đã xóa sạch Database Pool!");
     };
 
-    // =========================================================================
-    // HIỆU ỨNG GÕ PHÍM TỪNG KÝ TỰ (TYPEWRITER SIMULATION)
-    // =========================================================================
+    // GIẢ LẬP GÕ PHÍM TỪNG KÝ TỰ (TYPEWRITER 75ms/char)
     function typeDomainHumanLike(domain, onDone) {
       urlIn.value = "";
       setLog("⌨️ Đang giả lập gõ phím: " + domain, "#a78bfa");
@@ -885,25 +876,27 @@
           idx++;
         } else {
           clearInterval(typeTimer);
-          setLog("✨ Đã nhập xong domain: " + domain, "#22c55e");
+          setLog("✨ Đã nhập xong: " + domain + " (Đợi 1.2s chuẩn bị mở tab...)", "#22c55e");
           setBadge("Đã nhập ✓", "ok");
-          setTimeout(() => onDone(sanitizeUrl(domain)), 600);
+          // Delay tự nhiên 1.2 giây trước khi mở trang để tránh bị coi là bot
+          setTimeout(() => onDone(sanitizeUrl(domain)), 1200);
         }
-      }, 70); // Gõ mỗi ký tự 70ms giống người thật
+      }, 75);
     }
 
-    // Tự động bấm nút "ĐỔI TỪ KHÓA MỚI" trên GTraffic nếu trang đích không có mã
+    // Tự động bấm nút "ĐỔI TỪ KHÓA MỚI" nếu trang đích không có mã
     function triggerChangeTask() {
       for (const b of document.querySelectorAll("button, a, div[role='button']")) {
         const txt = b.innerText || b.textContent || "";
         if (/đổi\s*từ\s*khóa/i.test(txt)) {
           b.style.outline = "3px solid #ef4444";
-          setLog("🔄 Trang đích không có nút G hợp lệ! Đang tự động đổi từ khóa mới...", "#ef4444");
+          setLog("🔄 Trang đích không có nút lấy mã! Đang đổi từ khóa...", "#ef4444");
           setTimeout(() => {
             b.click();
             setTimeout(() => {
               urlIn.value = "";
               if (isDirectGTraffic) initDirectTask(true);
+              else initStandardOrTrafficso1Task();
             }, 1200);
           }, 1500);
           return true;
@@ -912,7 +905,7 @@
       return false;
     }
 
-    // Lắng nghe cập nhật từ tab ngầm (đồng bộ số giây, trạng thái cuộn, và mã)
+    // Lắng nghe cập nhật từ tab ngầm
     if (typeof GM_addValueChangeListener === "function") {
       GM_addValueChangeListener(KEY_PING, (_, __, v) => {
         if (!v || v.key !== keyIn.value) return;
@@ -929,7 +922,7 @@
           setBadge("Đang lướt...", "info");
           setLog("📜 " + v.seconds);
         } else if (v.status === "CLICKED") {
-          setBadge("Đã bấm nút G!", "info");
+          setBadge("Đã bấm Logo G!", "info");
           setLog("🎯 " + v.seconds);
         } else if (v.seconds !== undefined) {
           setBadge(`Đang ủ: ${v.seconds}s`, "info");
@@ -945,7 +938,6 @@
           setLog("🎉 Giải mã thành công: " + v.code, "#22c55e");
           cdBox.style.display = "none";
 
-          // Hiển thị khung Vault Cinematic
           vault.style.display = "block";
           vaultCd.textContent = v.code;
 
@@ -961,7 +953,7 @@
     }
 
     // =========================================================================
-    // NỀN TẢNG 1: DIRECT.GTRAFFIC.IO (Auto Leak + Typewriter Simulation)
+    // NỀN TẢNG 1: DIRECT.GTRAFFIC.IO (Auto Leak + Typewriter)
     // =========================================================================
     if (isDirectGTraffic) {
       keyIn.value = "direct_" + shortKey;
@@ -977,7 +969,6 @@
           const domain = findDirectLeakedDomain();
           if (domain) {
             clearInterval(poll);
-            // Kích hoạt hiệu ứng gõ phím người thật
             typeDomainHumanLike(domain, finalUrl => {
               urlIn.value = finalUrl;
               const p = getPool();
@@ -1008,27 +999,27 @@
     }
 
     // =========================================================================
-    // NỀN TẢNG 2: GTRAFFIC.IO TIÊU CHUẨN (OCR AI + Typewriter Simulation)
+    // NỀN TẢNG 2 & 3: TRAFFICSO1.COM & GTRAFFIC.IO (OCR AI + Ghép từ khóa Title)
     // =========================================================================
     $id("gt-rescan").onclick = () => doScanStandard(true);
 
-    function initStandardTask() {
+    function initStandardOrTrafficso1Task() {
       const img = findTaskImage();
       const taskKey = computeTaskKey(img);
-      keyIn.value = taskKey;
+      keyIn.value = (isTrafficSo1 ? "so1_" : "") + taskKey;
 
       const pool = getPool();
-      if (pool[taskKey]?.url && !pool[taskKey].url.includes("entasymercadeo")) {
-        urlIn.value = pool[taskKey].url;
+      if (pool[keyIn.value]?.url && !pool[keyIn.value].url.includes("entasymercadeo")) {
+        urlIn.value = pool[keyIn.value].url;
         setBadge("Đã có trong Pool", "info");
-        setLog("✨ Đã lưu từ trước (Key: " + taskKey + "): " + pool[taskKey].url);
+        setLog("✨ Đã lưu từ trước (Key: " + keyIn.value + "): " + pool[keyIn.value].url);
         if (autoCb.checked) setTimeout(doStart, 900);
       } else {
         doScanStandard(false);
       }
     }
 
-    setTimeout(initStandardTask, 800);
+    setTimeout(initStandardOrTrafficso1Task, 800);
 
     function doScanStandard(force = false) {
       setBadge("Đang tìm ảnh...", "info");
@@ -1039,7 +1030,7 @@
         setTimeout(() => {
           const img2 = findTaskImage();
           if (img2) {
-            const actualKey = computeTaskKey(img2);
+            const actualKey = (isTrafficSo1 ? "so1_" : "") + computeTaskKey(img2);
             keyIn.value = actualKey;
             startOcr(img2, actualKey, force);
           } else {
@@ -1050,7 +1041,7 @@
         return;
       }
 
-      const actualKey = computeTaskKey(img);
+      const actualKey = (isTrafficSo1 ? "so1_" : "") + computeTaskKey(img);
       keyIn.value = actualKey;
       startOcr(img, actualKey, force);
     }
@@ -1069,7 +1060,7 @@
 
       const src = img.currentSrc || img.src || (img.srcset || "").split(" ")[0];
       setBadge("Đang quét OCR...", "info");
-      setLog("📡 Tải ảnh Bước 2 để quét OCR...");
+      setLog("📡 Tải ảnh Bước 2 để gửi lên AI OCR.space...");
 
       GM_xmlhttpRequest({
         method: "GET", url: src,
@@ -1125,7 +1116,7 @@
               setLog("❌ " + errMsg);
               return;
             }
-            setLog("✨ OCR xong! Đang phân tích domain...");
+            setLog("✨ OCR xong! Đang bóc tách và phân tích domain...");
             handleOcrText(text, taskKey);
           } catch(e) {
             setBadge("Lỗi parse", "err");
@@ -1161,6 +1152,7 @@
       });
     }
 
+    // THUẬT TOÁN BÓC TÁCH DOMAIN THÔNG MINH (GHÉP TIỀN TỐ VỚI TỪ KHÓA BÀI VIẾT)
     function extractStandardDomain(normalizedText, rawText) {
       const TLD = "com\\.vn|net\\.vn|org\\.vn|edu\\.vn|com|vn|net|org|co|in|io|top|club|xyz|site|vip|cc|biz|info|live|app|win|bet|me|online|tv|news|blog|store|game|click|link|work|cash|bid";
       const re = new RegExp(`(?:https?:\\/\\/)?([a-zA-Z0-9][a-zA-Z0-9_\\-]{1,})\\.(?:${TLD})(?:\\/[^\\s]*)?`, "gi");
@@ -1168,22 +1160,37 @@
       const candidates = [];
       let m;
 
+      // 1. Quét domain chuẩn
       while ((m = re.exec(normalizedText)) !== null) {
         const full = m[0].replace(/^https?:\/\//i, "").replace(/[.*_~-]+$/, "").split(/[\/\s]/)[0];
-        if (full.length > 5 && !full.startsWith("gtraffic") && !full.startsWith("ocr.space")) {
+        if (full.length > 5 && !full.startsWith("gtraffic") && !full.startsWith("trafficso1") && !full.startsWith("ocr.space")) {
           candidates.push(full);
         }
       }
 
+      // 2. Quét domain bị che dạng fun88...com
       const maskedRe = new RegExp(`(?:https?:\\/\\/)?([a-zA-Z0-9]{3,})\\.{2,}(?:${TLD})`, "gi");
       while ((m = maskedRe.exec(rawText)) !== null) {
         const prefix = m[1];
-        const wordRe = new RegExp(`\\b(${prefix}[a-zA-Z0-9]+)\\b`, "gi");
+        // Tìm từ đứng sau prefix trong tiêu đề (vd: "Fun88 Yoko" -> ghép "fun88yoko.com")
+        const wordRe = new RegExp(`\\b${prefix}\\s*([a-zA-Z0-9]+)\\b`, "gi");
         let wm = wordRe.exec(rawText);
-        if (wm && wm[1].length > prefix.length) {
-          candidates.unshift(wm[1].toLowerCase() + ".com");
+        if (wm && wm[1].length >= 2) {
+          candidates.unshift((prefix + wm[1]).toLowerCase() + ".com");
         } else {
           candidates.push(prefix + ".com");
+        }
+      }
+
+      // 3. Quét tiền tố https://tên và ghép với từ khóa kế tiếp trong tiêu đề bài viết
+      const httpsRe = /https?:\/\/([a-zA-Z0-9]{3,})/gi;
+      while ((m = httpsRe.exec(rawText)) !== null) {
+        const prefix = m[1];
+        if (prefix.length >= 3 && !prefix.startsWith("google") && !prefix.startsWith("cdn")) {
+          const titleMatch = new RegExp(`\\b${prefix}\\s+([a-zA-Z0-9]{2,15})\\b`, "i").exec(rawText);
+          if (titleMatch) {
+            candidates.unshift((prefix + titleMatch[1]).toLowerCase() + ".com");
+          }
         }
       }
 
@@ -1232,7 +1239,7 @@
       ov.innerHTML = `
 <div class="gt-modal">
   <div class="gt-modal-hdr">
-    <b style="font-size:14px">📦 Database Pool (${isDirectGTraffic ? 'Direct Links' : 'Ảnh nhiệm vụ'})</b>
+    <b style="font-size:14px">📦 Database Pool</b>
     <button id="gp-close" style="background:none;border:none;color:#f1f5f9;font-size:18px;cursor:pointer">✕</button>
   </div>
   <div class="gt-pool-list" id="gp-list">

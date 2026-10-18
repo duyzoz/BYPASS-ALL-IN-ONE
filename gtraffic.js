@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * GTraffic Bypass All-In-One (Duyzoz Edition) - Core Engine
+ * GTraffic Bypass All-In-One (Duyzoz Edition) - Core Engine v2.2.0
  * Author: Duyzoz
  * Repo: https://github.com/duyzoz/BYPASS-ALL-IN-ONE
  * =========================================================================
@@ -161,14 +161,13 @@
 
       // Nhiệm vụ 2: Quét số giây đếm ngược và đồng bộ về Tab Mẹ
       let remainingSec = null;
-      // Tìm số đếm trong vòng tròn hoặc thẻ chứa số
       const countdownEls = document.querySelectorAll(
         '.countdown, [class*="timer"], [id*="timer"], [class*="countdown"], [id*="count"], .trade-btn__content'
       );
       for (const el of countdownEls) {
         const text = el.innerText ? el.innerText.trim() : "";
         const match = text.match(/(\d{1,3})/);
-        if (match && parseInt(match[1], 10) > 0 && parseInt(match[1], 10) <= 120) {
+        if (match && parseInt(match[1], 10) > 0 && parseInt(match[1], 10) <= 180) {
           remainingSec = parseInt(match[1], 10);
           break;
         }
@@ -232,7 +231,7 @@
     if (isInitialized) return;
     isInitialized = true;
 
-    // Trích xuất Key từ URL (vd: https://gtraffic.io/3sQJA_W -> key = "3sQJA_W")
+    // Trích xuất Key từ URL (vd: https://gtraffic.io/Iz75DQS -> key = "Iz75DQS")
     const pathMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
     const taskKey = pathMatch ? pathMatch[1] : "UNKNOWN";
 
@@ -318,6 +317,10 @@
       .gt-badge.info {
         border-color: #38bdf8;
         color: #38bdf8;
+      }
+      .gt-badge.danger {
+        border-color: #ef4444;
+        color: #ef4444;
       }
       .gt-body {
         padding: 12px 14px;
@@ -418,10 +421,11 @@
         font-size: 12px;
         color: #38bdf8;
         font-family: Consolas, monospace;
-        min-height: 38px;
+        min-height: 48px;
         display: flex;
         align-items: center;
         word-break: break-all;
+        line-height: 1.4;
       }
       .gt-btn-discord {
         background: #5865f2;
@@ -445,7 +449,7 @@
       .gt-modal-overlay {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.7);
+        background: rgba(0,0,0,0.75);
         z-index: 2147483647;
         display: flex;
         align-items: center;
@@ -455,7 +459,7 @@
         background: #0f172a;
         border: 1px solid #334155;
         border-radius: 12px;
-        width: 460px;
+        width: 480px;
         max-width: 90vw;
         padding: 16px;
         color: #f8fafc;
@@ -647,156 +651,181 @@
       setBadge("Đang quét OCR...", "info");
       setLog("🔍 Đang tìm ảnh nhiệm vụ trên trang...");
 
-      // Cách tìm ảnh nhiệm vụ chuẩn xác:
-      // 1. Tìm trong khối Bước 2 / Hướng dẫn
-      let taskImg = null;
-      const allImgs = Array.from(document.querySelectorAll("img"));
+      // 1. TÌM CHÍNH XÁC THẺ ẢNH NHIỆM VỤ DỰA THEO ĐẶC ĐIỂM DOM THẬT
+      const taskImg = document.querySelector('img[alt="Anh tim kiem"]') ||
+                      document.querySelector('img[src*="cdn.gtraffic.io"]') ||
+                      document.querySelector('img[srcset*="cdn.gtraffic.io"]') ||
+                      document.querySelector('img.gallery-item');
 
-      for (const img of allImgs) {
-        const parentText = img.closest("div, section, p, table")?.innerText || "";
-        if (
-          /bước\s*0?2/i.test(parentText) ||
-          /hình ảnh bên dưới/i.test(parentText) ||
-          /tìm và truy cập/i.test(parentText)
-        ) {
-          taskImg = img;
-          break;
+      if (!taskImg) {
+        // Fallback: Tìm ảnh có kích thước phù hợp nằm sau "BƯỚC 02"
+        let fallbackImg = null;
+        const allImgs = Array.from(document.querySelectorAll("img"));
+        for (const img of allImgs) {
+          const parentText = img.closest("div, section, p")?.innerText || "";
+          if (/bước\s*0?2/i.test(parentText) || /tìm và truy cập/i.test(parentText)) {
+            fallbackImg = img;
+            break;
+          }
         }
-      }
 
-      // 2. Dự phòng: Tìm ảnh có kích thước phù hợp (trừ logo)
-      if (!taskImg) {
-        taskImg = allImgs.find(img => {
-          const w = img.naturalWidth || img.width;
-          const h = img.naturalHeight || img.height;
-          return w > 180 && h > 60 && !img.src.includes("logo") && !img.src.includes("icon");
-        });
-      }
-
-      if (!taskImg) {
-        setBadge("Không thấy ảnh", "normal");
-        setLog("❌ Không tìm thấy ảnh nhiệm vụ. Vui lòng nhập link tay!");
-        return;
-      }
-
-      setLog("📡 Đang gửi ảnh sang OCR.space...");
-
-      // Gọi OCR API
-      callOcrApi(taskImg, (err, text) => {
-        if (err || !text) {
-          setBadge("Lỗi OCR", "normal");
-          setLog("❌ Lỗi OCR: " + (err || "Không nhận diện được chữ"));
+        if (!fallbackImg) {
+          setBadge("Không thấy ảnh", "danger");
+          setLog("❌ Không tìm thấy ảnh nhiệm vụ. Bạn có thể dán link trực tiếp vào ô!");
           return;
         }
+        return processImageOcr(fallbackImg, key);
+      }
 
-        setLog("✨ Đã đọc xong OCR! Đang phân tích domain...");
+      processImageOcr(taskImg, key);
+    }
 
-        // Phân tích domain từ text
-        const domain = parseDomainFromOcr(text);
-        if (domain) {
-          const finalUrl = domain.startsWith("http") ? domain : `https://${domain}/`;
-          urlInput.value = finalUrl;
-          setBadge("Đã nhận diện", "success");
-          setLog(`✅ Domain: ${domain}`);
+    function processImageOcr(imgEl, key) {
+      setLog("📡 Đang trích xuất dữ liệu ảnh từ CDN...");
 
-          // Lưu vào Pool Database
-          const currentPool = getPool();
-          currentPool[key] = { url: finalUrl, date: Date.now() };
-          savePool(currentPool);
+      // Lấy link ảnh thực tế từ currentSrc hoặc src hoặc srcset
+      let imgSrc = imgEl.currentSrc || imgEl.src;
+      if (!imgSrc && imgEl.srcset) {
+        imgSrc = imgEl.srcset.split(" ")[0];
+      }
 
-          // Nếu có bật Tự động chạy
-          if (autoRunChk.checked) {
-            setTimeout(startExecution, 1000);
+      // TẢI ẢNH BẰNG GM_xmlhttpRequest ĐỂ VƯỢT LỖI 403 FORBIDDEN CỦA CDN
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: imgSrc,
+        headers: {
+          "Referer": window.location.href,
+          "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+        },
+        responseType: "blob",
+        onload: function (res) {
+          if (res.status >= 200 && res.status < 300 && res.response) {
+            const reader = new FileReader();
+            reader.onloadend = function () {
+              const base64Data = reader.result;
+              sendBase64ToOcr(base64Data, key);
+            };
+            reader.onerror = function () {
+              tryCanvasConversion(imgEl, key);
+            };
+            reader.readAsDataURL(res.response);
+          } else {
+            tryCanvasConversion(imgEl, key);
           }
-        } else {
-          setBadge("Cần nhập tay", "normal");
-          setLog("⚠️ Không trích xuất được domain rõ ràng từ OCR.");
+        },
+        onerror: function () {
+          tryCanvasConversion(imgEl, key);
         }
       });
     }
 
-    function callOcrApi(imgEl, callback) {
+    function tryCanvasConversion(imgEl, key) {
       try {
-        // Chuyển ảnh sang Base64 để tránh lỗi CORS hotlinking
         const canvas = document.createElement("canvas");
-        canvas.width = imgEl.naturalWidth || imgEl.width;
-        canvas.height = imgEl.naturalHeight || imgEl.height;
+        canvas.width = imgEl.naturalWidth || imgEl.width || 655;
+        canvas.height = imgEl.naturalHeight || imgEl.height || 130;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(imgEl, 0, 0);
         const dataUrl = canvas.toDataURL("image/png");
-
-        const formData = new FormData();
-        formData.append("apikey", OCR_API_KEY);
-        formData.append("base64Image", dataUrl);
-        formData.append("language", "vie");
-        formData.append("isOverlayRequired", "false");
-        formData.append("OCREngine", "2");
-        formData.append("scale", "true");
-        formData.append("detectOrientation", "true");
-
-        GM_xmlhttpRequest({
-          method: "POST",
-          url: OCR_API_URL,
-          data: formData,
-          onload: function (res) {
-            try {
-              const json = JSON.parse(res.responseText);
-              if (json && json.ParsedResults && json.ParsedResults[0]) {
-                callback(null, json.ParsedResults[0].ParsedText);
-              } else {
-                callback(json.ErrorMessage || "OCR trả về rỗng");
-              }
-            } catch (ex) {
-              callback(ex.message);
-            }
-          },
-          onerror: function (err) {
-            callback("Lỗi kết nối OCR API");
-          }
-        });
+        sendBase64ToOcr(dataUrl, key);
       } catch (err) {
-        // Fallback: Gửi bằng URL ảnh trực tiếp
-        const formData = new FormData();
-        formData.append("apikey", OCR_API_KEY);
-        formData.append("url", imgEl.src);
-        formData.append("language", "vie");
-        formData.append("OCREngine", "2");
+        setBadge("Lỗi ảnh", "danger");
+        setLog("❌ Không thể trích Base64 của ảnh: " + err.message);
+      }
+    }
 
-        GM_xmlhttpRequest({
-          method: "POST",
-          url: OCR_API_URL,
-          data: formData,
-          onload: function (res) {
-            try {
-              const json = JSON.parse(res.responseText);
-              if (json && json.ParsedResults && json.ParsedResults[0]) {
-                callback(null, json.ParsedResults[0].ParsedText);
-              } else {
-                callback(json.ErrorMessage || "OCR trả về rỗng");
-              }
-            } catch (ex) {
-              callback(ex.message);
+    function sendBase64ToOcr(base64Data, key) {
+      setLog("🚀 Đang gửi ảnh sang AI OCR.space nhận diện...");
+
+      const formData = new FormData();
+      formData.append("apikey", OCR_API_KEY);
+      formData.append("base64Image", base64Data);
+      // LƯU Ý QUAN TRỌNG: Language trong OCR.space dùng 'eng' (không dùng 'vie' để tránh lỗi E201)
+      formData.append("language", "eng");
+      formData.append("isOverlayRequired", "false");
+      formData.append("OCREngine", "2");
+      formData.append("scale", "true");
+      formData.append("detectOrientation", "true");
+
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: OCR_API_URL,
+        data: formData,
+        onload: function (res) {
+          try {
+            const json = JSON.parse(res.responseText);
+            if (json && json.ParsedResults && json.ParsedResults[0]) {
+              const rawText = json.ParsedResults[0].ParsedText || "";
+              setLog("✨ OCR đọc xong! Đang lọc domain...");
+              handleOcrSuccess(rawText, key);
+            } else {
+              const errMsg = (json.ErrorMessage && json.ErrorMessage[0]) || "Không có kết quả chữ";
+              setBadge("Lỗi OCR", "danger");
+              setLog("❌ Lỗi OCR: " + errMsg);
             }
-          },
-          onerror: function (err) {
-            callback("Lỗi mạng OCR");
+          } catch (ex) {
+            setBadge("Lỗi parse", "danger");
+            setLog("❌ Lỗi xử lý JSON: " + ex.message);
           }
-        });
+        },
+        onerror: function () {
+          setBadge("Lỗi mạng", "danger");
+          setLog("❌ Không thể kết nối tới server OCR.space");
+        }
+      });
+    }
+
+    function handleOcrSuccess(rawText, key) {
+      console.log("[GTraffic OCR Raw]:\n" + rawText);
+
+      // Bóc tách Domain từ rawText
+      const domain = parseDomainFromOcr(rawText);
+
+      if (domain) {
+        const finalUrl = domain.startsWith("http") ? domain : `https://${domain}/`;
+        urlInput.value = finalUrl;
+        setBadge("Đã nhận diện", "success");
+        setLog(`✅ Domain: ${domain}`);
+
+        // Lưu vào Pool Database cho Key này
+        const currentPool = getPool();
+        currentPool[key] = { url: finalUrl, date: Date.now() };
+        savePool(currentPool);
+
+        // Tự động chạy nếu có tick
+        if (autoRunChk.checked) {
+          setTimeout(startExecution, 1000);
+        }
+      } else {
+        setBadge("Cần nhập tay", "normal");
+        setLog("⚠️ Không tách được domain rõ ràng. Đoạn OCR: " + rawText.substring(0, 40) + "...");
       }
     }
 
     function parseDomainFromOcr(rawText) {
-      // 1. Tìm URL dạng https://domain.com
-      const urlMatch = rawText.match(/https?:\/\/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})/i);
-      if (urlMatch) return urlMatch[1];
+      if (!rawText) return null;
+      const clean = rawText.replace(/\r\n/g, "\n");
 
-      // 2. Tìm domain dạng xxx.com, xxx.vn, xxx.in, xxx.net, xxx.org
-      const domainMatch = rawText.match(/([a-zA-Z0-9-]{3,}\.(?:com|vn|net|org|in|io|top|club|xyz|site|vip|cc))/i);
-      if (domainMatch) return domainMatch[1];
+      // 1. Tìm định dạng URL chuẩn: https://...
+      const urlMatch = clean.match(/https?:\/\/([^\s\/\>]+)/i);
+      if (urlMatch) {
+        let d = urlMatch[1].replace(/^[.*_~-]+/, "").replace(/[.*_~-]+$/, "");
+        if (d.includes(".")) return d;
+      }
 
-      // 3. Tìm dạng bị che: filectui... -> lấy chữ đầu nếu cần
-      const hiddenMatch = rawText.match(/([a-zA-Z0-9_-]{4,})\s*(?:\.\.\.|\*\*\*)/);
-      if (hiddenMatch) return hiddenMatch[1];
+      // 2. Tìm domain có phần mở rộng phổ biến (kể cả bị che phần đầu như ...entasymarcadeo.co)
+      const domainRegex = /([a-zA-Z0-9_-]{2,}\.(?:com|vn|co|in|net|org|io|top|club|xyz|site|vip|cc|biz|info|live|app))\b/i;
+      const domainMatch = clean.match(domainRegex);
+      if (domainMatch) {
+        let d = domainMatch[1].replace(/^[.*_~-]+/, "");
+        return d;
+      }
+
+      // 3. Tìm dạng có dấu chấm phân cách
+      const looseMatch = clean.match(/([a-zA-Z0-9-]{3,}\.[a-zA-Z]{2,6})/);
+      if (looseMatch) {
+        return looseMatch[1].replace(/^[.*_~-]+/, "");
+      }
 
       return null;
     }
@@ -824,7 +853,7 @@
       // Mở Tab Ngầm (Background Tab)
       if (typeof GM_openInTab === "function") {
         GM_openInTab(targetUrl, {
-          active: false,    // Không focus sang tab mới
+          active: false,    // Không chuyển focus sang tab mới
           insert: true,
           setParent: true
         });

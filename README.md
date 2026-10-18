@@ -6,13 +6,13 @@
 ![Tampermonkey](https://img.shields.io/badge/Tampermonkey-v4.0+-black.svg)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success.svg)
-![Version](https://img.shields.io/badge/Version-3.1.0-cyan.svg)
+![Version](https://img.shields.io/badge/Version-3.2.0-cyan.svg)
 
 **Công cụ bypass tự động nhiệm vụ GTraffic chuyên dụng & thông minh nhất**  
-*Tích hợp AI OCR nhận diện ảnh, Fake Google Referrer, Chống đóng băng tab ngầm & Tự động lấy mã*  
+*Hỗ trợ song song cả 2 nền tảng: `gtraffic.io` (OCR AI) & `direct.gtraffic.io` (Auto Leak Domain)*  
 *Phát triển bởi **Duyzoz***
 
-[📥 Cài đặt ngay](#-cài-đặt-nhanh-userscript) • [✨ Tính năng](#-tính-năng-nổi-bật) • [🔍 Hướng dẫn DevTools](#-hướng-dẫn-soi-ảnh-nhiệm-vụ-trên-firefox-devtools) • [💬 Discord](#-hỗ-trợ--cộng-đồng)
+[📥 Cài đặt ngay](#-cài-đặt-nhanh-userscript) • [✨ Tính năng 2 nền tảng](#-hỗ-trợ-song-song-2-nền-tảng) • [💬 Discord](#-hỗ-trợ--cộng-đồng)
 
 </div>
 
@@ -22,70 +22,35 @@
 
 Bấm vào đường link bên dưới để cài đặt trực tiếp vào **Tampermonkey** hoặc **Violentmonkey**:
 
-👉 **[CÀI ĐẶT GTRAFFIC BYPASS USERSCRIPT v3.1.0](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js?v=3.1.0)**
+👉 **[CÀI ĐẶT GTRAFFIC BYPASS USERSCRIPT v3.2.0](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js?v=3.2.0)**
 
-*(Nếu bạn đang dùng bản cũ, vui lòng xóa bản cũ trong Dashboard Tampermonkey hoặc mở link trên rồi nhấn **Reinstall / Update** để cập nhật lên v3.0.0).*
-
----
-
-## ✨ Tính năng nổi bật
-
-### 1. 🤖 Tự động nhận diện ảnh nhiệm vụ bằng OCR.space
-- Sử dụng API chính thức của **OCR.space** (`K84564487988957`) với OCR Engine 2 tối ưu hóa độ chính xác.
-- Tự động tìm kiếm ảnh nhiệm vụ ở Bước 2, chuyển đổi sang Base64 qua HTML5 Canvas và quét chữ.
-- Thuật toán bóc tách Regex tự động nhận diện Domain chuẩn 100% và tiền tố tìm kiếm.
-
-### 2. 🗄️ Hệ thống Key Database & Caching (+Pool)
-- Mỗi URL hoặc chiến dịch có một **Key định danh riêng** (lấy từ URL `gtraffic.io/{key}`).
-- Khi quét xong, kết quả sẽ được lưu vào cơ sở dữ liệu nội bộ (`+Pool`).
-- Lần sau khi gặp lại Key đó, script sẽ **tự động gọi từ Database** mà không cần tốn lượt quét OCR!
-
-### 3. 🛡️ Tab Ngầm Siêu Nhẹ & Chống Đóng Băng (Fix Tab Anti-Freeze)
-- Tự động mở website đích ở **chế độ Tab Ngầm (`active: false`)**, người dùng không bị gián đoạn hay nhảy màn hình.
-- **Bypass cơ chế dừng đếm ngược:** Ghi đè `EventTarget.addEventListener` (chặn `visibilitychange`, `blur`, `pagehide`), ép `document.hidden = false` và chuyển `requestAnimationFrame` về chu kỳ 16ms (`~60 FPS`). Dù tab đang ẩn, bộ đếm thời gian vẫn chạy với tốc độ tối đa!
-
-### 4. 🌐 Giả mạo nguồn truy cập (Fake Google Referrer)
-- Can thiệp ở tầng `document-start`, ép `document.referrer = 'https://www.google.com/'`.
-- Giúp website khách hàng tin rằng traffic xuất phát từ việc tìm kiếm tự nhiên trên Google.
-
-### 5. 🎯 Tự động căn giữa & Bấm nút (#avt-btn)
-- Tự định vị nút nhận mã `#avt-btn`, viền đỏ cảnh báo, cuộn vào giữa màn hình.
-- Giả lập chuỗi sự kiện chuột (`mousedown` ➔ `mouseup` ➔ `click`) để kích hoạt đếm ngược.
-
-### 6. ⏱️ Đồng bộ thời gian thực & Tự động sao chép mã
-- Tab ngầm liên tục bắn số giây còn lại (`PING`) về Tab Mẹ GTraffic, hiển thị Badge tiến độ: `Đang ủ (KEY): 45s`.
-- Khi đếm xong, mã được tự động lưu vào Clipboard, điền tự động vào ô xác nhận của GTraffic và tự đóng tab ngầm sau 2 giây.
+*(Nếu bạn đang dùng bản cũ, mở link trên rồi nhấn **Reinstall / Update** để cập nhật lên v3.2.0).*
 
 ---
 
-## 🖥️ Giao diện Cyber HUD (Duyzoz Edition)
+## ✨ Hỗ trợ song song 2 nền tảng
 
-Giao diện được thiết kế hiện đại chuẩn Cyberpunk / Glassmorphism:
-- **Badge trạng thái:** Hiển thị `Sẵn sàng`, `Đang quét OCR...`, `Đang ủ (KEY): XXs`, `Hoàn thành!`.
-- **Nút "Quét lại" / "Quét Key":** Thao tác thủ công hoặc ép quét lại ảnh nếu cần.
-- **Nút "Lấy mã ngay":** Kích hoạt mở tab ngầm làm nhiệm vụ.
-- **Nút "+Pool":** Quản lý danh sách Key & URL đã lưu trữ trong database.
-- **Hộp Console Log:** Cập nhật diễn biến từng bước minh bạch.
+### 1. ⚡ Nền tảng `direct.gtraffic.io` (Auto Leak Domain - Không cần OCR)
+- **Tự động bóc tách Domain:** Tự dò thẻ `<span class="notranslate break-all">` ở Bước 1 để lấy trực tiếp domain đích (ví dụ: `rajabandar99.net`) mà không tốn lượt quét OCR!
+- **Mở tab ngầm tự động:** Khởi chạy trang đích trong tab ngầm siêu nhẹ.
+- **Xử lý nút Logo SVG `#avt-d-btn` / `#trade-d-btn`:**
+  - Nhận diện cơ chế delay 2-6 giây của nút lấy mã trên trang web đích.
+  - Vòng lặp polling 400ms tự động chờ logo xuất hiện hoàn toàn.
+  - Tự động cuộn đến tọa độ nút và kích hoạt chuỗi sự kiện click chuẩn (`pointerdown` ➔ `mousedown` ➔ `mouseup` ➔ `click`).
+- **Đọc đếm ngược SVG `#trade-d-btn__content`:** Đồng bộ thời gian thực về HUD.
+- **Tự động lấy mã & điền form:** Khi hết giờ, tự copy mã vào Clipboard và điền tự động vào ô xác nhận của `direct.gtraffic.io`.
 
----
+### 2. 🤖 Nền tảng `gtraffic.io` tiêu chuẩn (OCR AI + Token Caching)
+- **OCR AI Engine 2:** Tự động lấy ảnh Bước 2 gửi API OCR.space nhận diện tên miền.
+- **Xử lý domain bị che:** Thuật toán Regex thông minh bóc tách các domain bị che dấu chấm/vạch đỏ dạng `188betm...com` hoặc ghép với từ khóa thương hiệu.
+- **Pool Database theo Token ảnh:** Mỗi ảnh nhiệm vụ có một Token riêng (`t_...`), đảm bảo quét chính xác từng nhiệm vụ mà không bị gán nhầm domain cũ.
 
-## 🔍 Hướng dẫn soi ảnh nhiệm vụ trên Firefox DevTools
-
-Nếu bạn muốn kiểm tra xem ảnh nhiệm vụ trả về từ đâu trong backend của GTraffic:
-
-1. Mở trang nhiệm vụ `https://gtraffic.io/...` trên Firefox.
-2. Nhấn phím `F12` (hoặc chuột phải chọn **Kiểm tra / Inspect**).
-3. **Kiểm tra DOM (Thẻ Inspector):**
-   - Bấm vào biểu tượng con trỏ góc trái DevTools ➔ chỉ vào ảnh kết quả Google ở Bước 2.
-   - Bạn sẽ thấy thẻ `<img src="...">` nằm trong thẻ cha chứa chữ `"Bước 02"`.
-4. **Kiểm tra Network (Thẻ Mạng):**
-   - Chuyển sang tab **Mạng (Network)** ➔ Chọn bộ lọc **Ảnh (Images)** hoặc **Fetch/XHR**.
-   - Tải lại trang (F5): Bạn sẽ thấy các request gọi ảnh nhiệm vụ và API chi tiết của chiến dịch.
+### 3. 🛡️ Tab ngầm chống đóng băng (Anti-Freeze) & Fake Google Referrer
+- **Fake Google Referrer:** Ép `document.referrer = 'https://www.google.com/'` ở `document-start`.
+- **Anti-Freeze:** Chặn các sự kiện `visibilitychange`, `blur`, `pagehide`, duy trì `requestAnimationFrame` 60 FPS giúp tab ngầm đếm ngược tốc độ tối đa dù đang ẩn.
 
 ---
 
 ## 💬 Hỗ trợ & Cộng đồng
 
-- **Tác giả:** Duyzoz
-- **Discord:** [Tham gia Discord nhận bản cập nhật](https://discord.gg/vnbp)
-- **Bản quyền:** MIT License © 2026 Duyzoz
+- Báo lỗi hoặc nhận bản cập nhật mới nhất tại Discord: [discord.gg/vnbp](https://discord.gg/vnbp)

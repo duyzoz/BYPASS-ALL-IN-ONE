@@ -1,37 +1,57 @@
-/**
- * =========================================================================
- * GTraffic Bypass All-In-One (Duyzoz Edition) - Core Engine v2.4.0
- * Author: Duyzoz
- * Repo: https://github.com/duyzoz/BYPASS-ALL-IN-ONE
- *
- * CHANGELOG v2.4.0:
- * - FIX: HUD luôn hiện 100% - dùng MutationObserver + retry loop thay vì
- *   chỉ gọi 1 lần lúc document-start khi body chưa tồn tại
- * - FIX: Xóa hoàn toàn pingTestDomain/recoverMaskedDomain (nguyên nhân bị block 404)
- * - FIX: OCR chỉ trả ra 1 domain duy nhất sạch nhất, không thêm tiền tố thừa
- * - FIX: sanitizeUrl loại bỏ icon unicode, punycode, ký tự rác triệt để
- * - IMPROVE: Tab ngầm chỉ kích hoạt trên domain trong Pool, không bắn request bừa
- * =========================================================================
- */
+// ==UserScript==
+// @name         GTraffic Bypass (Duyzoz)
+// @namespace    https://gtraffic.io/
+// @version      3.0.0
+// @description  Bypass tự động GTraffic - OCR nhận diện ảnh, tab ngầm đếm ngược, tự copy mã
+// @match        https://gtraffic.io/*
+// @match        http://gtraffic.io/*
+// @match        https://*.gtraffic.io/*
+// @match        *://*/*
+// @run-at       document-start
+// @icon         https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/assets/icon.png
+// @author       Duyzoz
+// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js
+// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js
+// @connect      api.ocr.space
+// @connect      cdn.gtraffic.io
+// @connect      *
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_openInTab
+// @grant        GM_addValueChangeListener
+// @grant        GM_setClipboard
+// @grant        unsafeWindow
+// @grant        window.close
+// ==/UserScript==
+
+/* =========================================================================
+   GTraffic Bypass All-In-One (Duyzoz Edition) - v3.0.0 Monolithic
+   - KHÔNG dùng @require (tránh hoàn toàn lỗi Tampermonkey cache vĩnh viễn)
+   - Tự động hiện Cyber HUD 100% trên gtraffic.io (miễn nhiễm Vue/React hydrate)
+   - Tab ngầm nhận diện target site, fake referrer, chống freeze, auto-click
+   - OCR.space trích xuất domain tự động + Pool Database
+   ========================================================================= */
 
 (function () {
   'use strict';
 
-  const OCR_API_KEY = "K84564487988957";
-  const OCR_API_URL = "https://api.ocr.space/parse/image";
-  const DISCORD_URL = "https://discord.gg/vnbp";
+  const OCR_API_KEY  = "K84564487988957";
+  const OCR_API_URL  = "https://api.ocr.space/parse/image";
+  const DISCORD_URL  = "https://discord.gg/vnbp";
 
-  const KEY_POOL    = "gtraffic_pool_db";
+  const KEY_POOL     = "gtraffic_pool_db";
   const KEY_SETTINGS = "gtraffic_settings";
-  const KEY_SESSION = "gtraffic_active_session";
-  const KEY_PING    = "gtraffic_sync_ping";
-  const KEY_DONE    = "gtraffic_sync_done";
+  const KEY_SESSION  = "gtraffic_active_session";
+  const KEY_PING     = "gtraffic_sync_ping";
+  const KEY_DONE     = "gtraffic_sync_done";
 
-  const isGTraffic = /gtraffic\.io/.test(window.location.hostname);
+  const isGTraffic   = /gtraffic\.io/i.test(window.location.hostname);
 
-  // =========================================================================
+  // ===========================================================================
   // UTILS
-  // =========================================================================
+  // ===========================================================================
 
   function copyToClipboard(text) {
     if (typeof GM_setClipboard === "function") {
@@ -39,37 +59,24 @@
     }
     const ta = document.createElement("textarea");
     ta.value = text;
-    Object.assign(ta.style, { position:"fixed", top:"-9999px", left:"-9999px" });
-    document.body.appendChild(ta);
+    Object.assign(ta.style, { position: "fixed", top: "-9999px", left: "-9999px" });
+    (document.body || document.documentElement).appendChild(ta);
     ta.select();
     try { document.execCommand("copy"); } catch (_) {}
-    document.body.removeChild(ta);
+    ta.remove();
     return true;
   }
 
-  /**
-   * Làm sạch URL khỏi:
-   * - Ký tự non-ASCII (icon ⭐, huy hiệu, unicode rác) → bị Punycode xn--
-   * - Breadcrumb phía sau ("> H88", "K9", khoảng trắng...)
-   * - Dấu chấm/gạch ở đầu (...)
-   * - Tự thêm https:// nếu thiếu
-   */
   function sanitizeUrl(raw) {
     if (!raw) return "";
-    // Cắt tại khoảng trắng, dấu >, ›, |, em-dash
     let u = raw.trim().split(/[\s\>\›\|\—\–]/)[0];
-    // Xóa toàn bộ ký tự non-printable ASCII (bao gồm icon ngôi sao unicode)
     u = u.replace(/[^\x21-\x7E]/g, "");
-    // Xóa dấu chấm, gạch thừa ở đầu (...entasy -> entasy)
     u = u.replace(/^(https?:\/\/)?[.\-_*~]+/, "$1");
-    // Xóa rác ở đuôi
     u = u.replace(/[.\-_*~,;:!?]+$/, "");
     if (!u) return "";
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-    // Validate bằng URL constructor – nếu trình duyệt vẫn encode Punycode thì bắt ra
     try {
       const parsed = new URL(u);
-      // Nếu hostname chứa xn-- thì bị unicode nhiễm → trả về rỗng để báo lỗi
       if (parsed.hostname.includes("xn--")) return "";
       return parsed.origin + "/";
     } catch (_) {
@@ -77,23 +84,52 @@
     }
   }
 
-  function getPool()          { return GM_getValue(KEY_POOL, {}); }
-  function savePool(p)        { GM_setValue(KEY_POOL, p); }
-  function getSettings()      { return GM_getValue(KEY_SETTINGS, { autoRun: true }); }
-  function saveSettings(s)    { GM_setValue(KEY_SETTINGS, s); }
+  function getPool()       { return GM_getValue(KEY_POOL, {}); }
+  function savePool(p)     { GM_setValue(KEY_POOL, p); }
+  function getSettings()   { return GM_getValue(KEY_SETTINGS, { autoRun: true }); }
+  function saveSettings(s) { GM_setValue(KEY_SETTINGS, s); }
 
-  // =========================================================================
-  // ★ TARGET WEBSITE MODE (Non-GTraffic pages)
-  //   Fake Referrer + Anti-freeze + Auto-click + Countdown sync + Copy code
-  // =========================================================================
+  function waitForBody(cb) {
+    if (document.body) { cb(); return; }
+    const id = setInterval(() => {
+      if (document.body) { clearInterval(id); cb(); }
+    }, 20);
+  }
+
+  // ===========================================================================
+  // ★ TARGET WEBSITE MODE (tab ngầm chạy trên website đích)
+  //   Chỉ kích hoạt nếu trang này đúng là trang được mở bởi phiên GTraffic
+  // ===========================================================================
   if (!isGTraffic) {
-    // Đảm bảo tính năng fake referrer chạy ngay ở document-start
+    let session = null;
+    try {
+      session = GM_getValue(KEY_SESSION, null);
+    } catch (_) { return; }
+
+    // Nếu không có session đang chờ lấy mã -> thoát ngay lập tức, không ảnh hưởng web khác
+    if (!session || !session.targetUrl || !session.key) return;
+
+    // Session hết hạn sau 10 phút
+    if (Date.now() - (session.ts || 0) > 600000) return;
+
+    // Kiểm tra hostname có liên quan đến targetUrl không
+    try {
+      const targetHost = new URL(session.targetUrl).hostname.replace(/^www\./, "").toLowerCase();
+      const currentHost = window.location.hostname.replace(/^www\./, "").toLowerCase();
+      if (!currentHost.includes(targetHost) && !targetHost.includes(currentHost)) {
+        return; // Không phải web đích -> thoát ngay
+      }
+    } catch (_) {
+      return;
+    }
+
+    // 1. Fake Google Referrer
     try {
       Object.defineProperty(document, "referrer", { get: () => "https://www.google.com/", configurable: true });
     } catch (_) {}
 
-    // Chống đóng băng tab background
-    const BLOCKED_EVENTS = ["visibilitychange","webkitvisibilitychange","blur","focusout","pagehide"];
+    // 2. Chống đóng băng tab khi chạy ngầm
+    const BLOCKED_EVENTS = ["visibilitychange", "webkitvisibilitychange", "blur", "focusout", "pagehide"];
     const _origAEL = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, fn, opts) {
       if (BLOCKED_EVENTS.includes(type)) return;
@@ -107,76 +143,46 @@
     }
     try { document.hasFocus = () => true; } catch (_) {}
     window.onblur = null;
-    window.requestAnimationFrame  = cb => window.setTimeout(() => cb(performance.now()), 16);
-    window.cancelAnimationFrame   = id => window.clearTimeout(id);
+    window.requestAnimationFrame = cb => window.setTimeout(() => cb(performance.now()), 16);
+    window.cancelAnimationFrame  = id => window.clearTimeout(id);
 
-    // Đợi DOM sẵn sàng rồi khởi agent
+    // 3. Khởi chạy agent tự động click nút & đồng bộ countdown
     waitForBody(() => runTargetAgent());
     return;
   }
 
-  // =========================================================================
-  // ★ GTRAFFIC MASTER PAGE MODE — Inject HUD (luôn luôn hiện)
-  // =========================================================================
-  waitForBody(() => {
-    if (!document.getElementById("gtraffic-hud-container")) {
-      mountHud();
-    }
-  });
-
-  // Backup: dùng MutationObserver phòng trường hợp body bị Vue/React thay thế sau khi mount
-  const _hudObserver = new MutationObserver(() => {
-    if (!document.getElementById("gtraffic-hud-container") && document.body) {
-      mountHud();
-    }
-  });
-  // Bắt đầu observe ngay khi html element có mặt
-  (function startObserve() {
-    if (document.documentElement) {
-      _hudObserver.observe(document.documentElement, { childList: true, subtree: false });
-    } else {
-      setTimeout(startObserve, 50);
-    }
-  })();
-
-  // =========================================================================
-  // waitForBody – Retry loop bất đồng bộ đến khi body tồn tại
-  // =========================================================================
-  function waitForBody(cb) {
-    if (document.body) { cb(); return; }
-    const id = setInterval(() => {
-      if (document.body) { clearInterval(id); cb(); }
-    }, 20);
-  }
-
-  // =========================================================================
-  // TARGET AGENT (chạy trên tab ngầm của website đích)
-  // =========================================================================
+  // ===========================================================================
+  // TARGET AGENT (chạy trong tab ngầm lấy mã)
+  // ===========================================================================
   function runTargetAgent() {
     let hasClicked = false;
-    let lastSec = null;
+    let lastSec    = null;
 
     const loop = setInterval(() => {
       const session = GM_getValue(KEY_SESSION, null);
       if (!session || !session.key) return;
 
-      // Auto-click nút #avt-btn
-      const btn = document.querySelector("#avt-btn");
+      // 1. Auto-click nút lấy mã #avt-btn
+      const btn = document.querySelector("#avt-btn")
+               || document.querySelector('[class*="avt-btn"]')
+               || document.querySelector('[id*="lay-ma"]')
+               || document.querySelector('[class*="lay-ma"]');
+
       if (btn && btn.isConnected && !hasClicked) {
         Object.assign(btn.style, {
-          position:"fixed", top:"50%", left:"50%",
-          transform:"translate(-50%,-50%)",
-          zIndex:"2147483647", outline:"4px solid red"
+          position: "fixed", top: "50%", left: "50%",
+          transform: "translate(-50%,-50%)",
+          zIndex: "2147483647", outline: "4px solid red"
         });
         const r = btn.getBoundingClientRect();
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        ["mousedown","mouseup","click"].forEach(t =>
-          btn.dispatchEvent(new MouseEvent(t, { view:window, bubbles:true, cancelable:true, clientX:cx, clientY:cy }))
+        ["mousedown", "mouseup", "click"].forEach(t =>
+          btn.dispatchEvent(new MouseEvent(t, { view: window, bubbles: true, cancelable: true, clientX: cx, clientY: cy }))
         );
         hasClicked = true;
       }
 
-      // Đồng bộ đếm ngược về tab mẹ
+      // 2. Đồng bộ thời gian đếm ngược về tab mẹ (GTraffic HUD)
       let sec = null;
       for (const el of document.querySelectorAll('[class*="timer"],[class*="countdown"],[id*="count"],.countdown')) {
         const m = (el.innerText || "").match(/(\d{1,3})/);
@@ -187,72 +193,319 @@
         GM_setValue(KEY_PING, { key: session.key, seconds: sec, ts: Date.now() });
       }
 
-      // Lấy mã xong
+      // 3. Khi xuất hiện mã -> tự động copy và báo về tab mẹ
       const codeEl = document.querySelector('.trade-btn__content.copy-allowed,[class*="copy-allowed"]');
       if (codeEl) {
-        const code = (codeEl.textContent || "").replace(/\s+/g,"").trim();
+        const code = (codeEl.textContent || "").replace(/\s+/g, "").trim();
         if (code.length >= 4) {
           copyToClipboard(code);
-          Object.assign(codeEl.style, { backgroundColor:"#22c55e", color:"#fff" });
+          Object.assign(codeEl.style, { backgroundColor: "#22c55e", color: "#fff" });
           GM_setValue(KEY_DONE, { key: session.key, code, ts: Date.now() });
           GM_deleteValue(KEY_SESSION);
           clearInterval(loop);
-          setTimeout(() => { try { window.close(); } catch(_){} }, 1500);
+          setTimeout(() => { try { window.close(); } catch(_) {} }, 1500);
         }
       }
     }, 600);
   }
 
-  // =========================================================================
-  // MOUNT HUD — Toàn bộ giao diện + logic
-  // =========================================================================
-  let _hudMounted = false;
+  // ===========================================================================
+  // ★ GTRAFFIC MASTER PAGE MODE — BẢO ĐẢM HIỆN HUD 100%
+  // ===========================================================================
+
+  function tryMount() {
+    if (!isGTraffic) return;
+    if (document.getElementById("gtraffic-hud-container")) return;
+    const parent = document.body || document.documentElement;
+    if (!parent) return;
+    mountHud();
+  }
+
+  // Khởi chạy đa tầng:
+  // 1. Ngay khi có thể
+  tryMount();
+
+  // 2. Khi body sẵn sàng
+  waitForBody(tryMount);
+
+  // 3. Khi DOMContentLoaded
+  document.addEventListener("DOMContentLoaded", tryMount);
+
+  // 4. Khi window.load
+  window.addEventListener("load", tryMount);
+
+  // 5. MutationObserver bắt mọi thay đổi DOM (Next.js/React re-render)
+  (function startObserver() {
+    if (document.documentElement) {
+      const obs = new MutationObserver(() => {
+        if (!document.getElementById("gtraffic-hud-container")) {
+          tryMount();
+        }
+      });
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } else {
+      setTimeout(startObserver, 50);
+    }
+  })();
+
+  // 6. Heartbeat kiểm tra định kỳ mỗi 1 giây (nếu bị xóa sẽ tự mọc lại ngay)
+  setInterval(() => {
+    if (isGTraffic && !document.getElementById("gtraffic-hud-container")) {
+      tryMount();
+    }
+  }, 1000);
+
+  // ===========================================================================
+  // MOUNT HUD
+  // ===========================================================================
   function mountHud() {
-    if (_hudMounted || document.getElementById("gtraffic-hud-container")) return;
-    _hudMounted = true;
+    if (document.getElementById("gtraffic-hud-container")) return;
 
     const pathMatch = window.location.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
-    const taskKey = pathMatch ? pathMatch[1] : "UNKNOWN";
+    const taskKey   = pathMatch ? pathMatch[1] : "UNKNOWN";
 
-    // ── CSS ──────────────────────────────────────────────────────────────────
-    const style = document.createElement("style");
-    style.textContent = `
-#gtraffic-hud-container{position:fixed;bottom:18px;right:18px;width:368px;background:#0f172a;border:1px solid #1e293b;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.75);color:#f1f5f9;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;z-index:2147483647;box-sizing:border-box;overflow:hidden;user-select:none}
-#gtraffic-hud-container *{box-sizing:border-box}
-.gt-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#0a1628;border-bottom:1px solid #1e293b;cursor:grab}
-.gt-dot{width:8px;height:8px;border-radius:50%;background:#38bdf8;box-shadow:0 0 8px #38bdf8;flex-shrink:0}
-.gt-title{font-weight:700;font-size:14px;color:#fff;margin-left:8px}
-.gt-author{color:#94a3b8;font-weight:400;font-size:12px}
-.gt-badge{background:#1e293b;border:1px solid #f59e0b;color:#f59e0b;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gt-badge.ok{border-color:#22c55e;color:#22c55e}.gt-badge.info{border-color:#38bdf8;color:#38bdf8}.gt-badge.err{border-color:#ef4444;color:#ef4444}
-.gt-body{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
-.gt-row{display:flex;justify-content:space-between;align-items:center}
-.gt-lbl{font-size:11.5px;font-weight:600;color:#94a3b8}
-.gt-link{background:none;border:none;color:#38bdf8;font-size:11.5px;font-weight:600;cursor:pointer;padding:0}
-.gt-link:hover{text-decoration:underline}
-.gt-input{width:100%;background:#020617;border:1px solid #1e293b;border-radius:7px;padding:7px 10px;color:#fff;font-size:12px;outline:none;font-family:Consolas,monospace}
-.gt-input:focus{border-color:#0284c7}
-.gt-ctrls{display:flex;align-items:center;gap:8px;margin-top:2px}
-.gt-chk-lbl{display:flex;align-items:center;gap:5px;font-size:12px;color:#cbd5e1;cursor:pointer;flex:1}
-.gt-btn{border:none;font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:.15s}
-.gt-btn.blue{background:#0284c7;color:#fff}.gt-btn.blue:hover{background:#0369a1}
-.gt-btn.gray{background:#1e293b;border:1px solid #334155;color:#f1f5f9}.gt-btn.gray:hover{background:#334155}
-.gt-log{background:#020617;border:1px solid #1e293b;border-radius:8px;padding:8px 11px;font-size:11.5px;color:#38bdf8;font-family:Consolas,monospace;min-height:44px;display:flex;align-items:center;word-break:break-all;line-height:1.45}
-.gt-discord{background:#5865f2;border:none;color:#fff;font-weight:600;font-size:12px;padding:8px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;transition:.15s}
-.gt-discord:hover{background:#4752c4}
-/* Pool modal */
-.gt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:2147483648;display:flex;align-items:center;justify-content:center}
-.gt-modal{background:#0f172a;border:1px solid #334155;border-radius:12px;width:460px;max-width:92vw;padding:16px;color:#f8fafc}
-.gt-modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.gt-pool-list{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin:8px 0}
-.gt-pi{background:#020617;padding:7px 10px;border-radius:6px;display:flex;align-items:center;font-size:12px}
-.gt-pi-key{font-weight:700;color:#38bdf8;min-width:75px;flex-shrink:0}
-.gt-pi-url{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 8px;color:#94a3b8}
-.gt-pi-del{background:none;border:none;color:#ef4444;cursor:pointer;font-weight:700}
-    `;
-    document.head.appendChild(style);
+    // ── CSS INJECTION ────────────────────────────────────────────────────────
+    const styleId = "gtraffic-hud-style";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+#gtraffic-hud-container {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  width: 375px !important;
+  max-width: 95vw !important;
+  background: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 14px !important;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.85) !important;
+  color: #f1f5f9 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 13px !important;
+  z-index: 2147483647 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  user-select: none !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+#gtraffic-hud-container * {
+  box-sizing: border-box !important;
+}
+.gt-hdr {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 11px 14px !important;
+  background: #0a1628 !important;
+  border-bottom: 1px solid #1e293b !important;
+  cursor: grab !important;
+}
+.gt-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: #38bdf8 !important;
+  box-shadow: 0 0 8px #38bdf8 !important;
+  flex-shrink: 0 !important;
+}
+.gt-title {
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  color: #fff !important;
+  margin-left: 8px !important;
+}
+.gt-author {
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+  font-size: 12px !important;
+}
+.gt-badge {
+  background: #1e293b !important;
+  border: 1px solid #f59e0b !important;
+  color: #f59e0b !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 10px !important;
+  border-radius: 20px !important;
+  max-width: 165px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.gt-badge.ok   { border-color: #22c55e !important; color: #22c55e !important; }
+.gt-badge.info { border-color: #38bdf8 !important; color: #38bdf8 !important; }
+.gt-badge.err  { border-color: #ef4444 !important; color: #ef4444 !important; }
 
-    // ── HTML ─────────────────────────────────────────────────────────────────
+.gt-body {
+  padding: 12px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 9px !important;
+}
+.gt-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+.gt-lbl {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+}
+.gt-link {
+  background: none !important;
+  border: none !important;
+  color: #38bdf8 !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+}
+.gt-link:hover { text-decoration: underline !important; }
+.gt-input {
+  width: 100% !important;
+  background: #020617 !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 7px !important;
+  padding: 7px 10px !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  outline: none !important;
+  font-family: Consolas, monospace !important;
+}
+.gt-input:focus { border-color: #0284c7 !important; }
+.gt-ctrls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-top: 2px !important;
+}
+.gt-chk-lbl {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  font-size: 12px !important;
+  color: #cbd5e1 !important;
+  cursor: pointer !important;
+  flex: 1 !important;
+}
+.gt-btn {
+  border: none !important;
+  font-weight: 700 !important;
+  font-size: 12.5px !important;
+  padding: 8px 14px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: .15s !important;
+}
+.gt-btn.blue { background: #0284c7 !important; color: #fff !important; }
+.gt-btn.blue:hover { background: #0369a1 !important; }
+.gt-btn.gray { background: #1e293b !important; border: 1px solid #334155 !important; color: #f1f5f9 !important; }
+.gt-btn.gray:hover { background: #334155 !important; }
+
+.gt-log {
+  background: #020617 !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 8px !important;
+  padding: 8px 11px !important;
+  font-size: 11.5px !important;
+  color: #38bdf8 !important;
+  font-family: Consolas, monospace !important;
+  min-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  word-break: break-all !important;
+  line-height: 1.45 !important;
+}
+.gt-discord {
+  background: #5865f2 !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  padding: 8px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  text-decoration: none !important;
+  transition: .15s !important;
+}
+.gt-discord:hover { background: #4752c4 !important; }
+
+.gt-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, .78) !important;
+  z-index: 2147483648 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.gt-modal {
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+  border-radius: 12px !important;
+  width: 460px !important;
+  max-width: 92vw !important;
+  padding: 16px !important;
+  color: #f8fafc !important;
+}
+.gt-modal-hdr {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 10px !important;
+}
+.gt-pool-list {
+  max-height: 220px !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  margin: 8px 0 !important;
+}
+.gt-pi {
+  background: #020617 !important;
+  padding: 7px 10px !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 12px !important;
+}
+.gt-pi-key {
+  font-weight: 700 !important;
+  color: #38bdf8 !important;
+  min-width: 75px !important;
+  flex-shrink: 0 !important;
+}
+.gt-pi-url {
+  flex: 1 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  margin: 0 8px !important;
+  color: #94a3b8 !important;
+}
+.gt-pi-del {
+  background: none !important;
+  border: none !important;
+  color: #ef4444 !important;
+  cursor: pointer !important;
+  font-weight: 700 !important;
+}
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    // ── HTML INJECTION ───────────────────────────────────────────────────────
     const hud = document.createElement("div");
     hud.id = "gtraffic-hud-container";
     hud.innerHTML = `
@@ -262,7 +515,7 @@
 </div>
 <div class="gt-body">
   <div class="gt-row">
-    <span class="gt-lbl">Tự động quét ảnh → URL & Key</span>
+    <span class="gt-lbl">Tự động quét ảnh → URL &amp; Key</span>
     <button class="gt-link" id="gt-rescan">Quét lại</button>
   </div>
   <div class="gt-row">
@@ -285,61 +538,61 @@
     Join Discord nhận bản cập nhật
   </a>
 </div>`;
-    document.body.appendChild(hud);
 
-    // Drag
+    const parent = document.body || document.documentElement;
+    parent.appendChild(hud);
+
     makeDraggable(hud, hud.querySelector("#gt-drag-handle"));
-
-    // Bind UI events
     bindEvents(taskKey, hud);
-
-    // Ngừng observe sau khi mount thành công
-    _hudObserver.disconnect();
   }
 
-  // ── DRAG ─────────────────────────────────────────────────────────────────
+  // ── DRAG LOGIC ─────────────────────────────────────────────────────────────
   function makeDraggable(el, handle) {
     let x0, y0, l0, t0;
     handle.addEventListener("mousedown", e => {
+      const rect = el.getBoundingClientRect();
       x0 = e.clientX; y0 = e.clientY;
-      l0 = el.offsetLeft; t0 = el.offsetTop;
+      l0 = rect.left; t0 = rect.top;
       el.style.bottom = "auto"; el.style.right = "auto";
       el.style.left = l0 + "px"; el.style.top = t0 + "px";
       const onMove = e2 => {
         el.style.left = (l0 + e2.clientX - x0) + "px";
         el.style.top  = (t0 + e2.clientY - y0) + "px";
       };
-      const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
       e.preventDefault();
     });
   }
 
-  // ── BIND EVENTS ──────────────────────────────────────────────────────────
+  // ── BIND EVENTS ────────────────────────────────────────────────────────────
   function bindEvents(taskKey, hud) {
-    const $id   = id => hud.querySelector("#" + id);
-    const badge = $id("gt-badge");
-    const log   = $id("gt-log");
-    const urlIn = $id("gt-url");
+    const $id    = id => hud.querySelector("#" + id);
+    const badge  = $id("gt-badge");
+    const log    = $id("gt-log");
+    const urlIn  = $id("gt-url");
     const autoCb = $id("gt-auto");
 
     const setBadge = (txt, cls="") => { badge.textContent = txt; badge.className = "gt-badge " + cls; };
     const setLog   = (txt, col="#38bdf8") => { log.textContent = txt; log.style.color = col; };
 
-    // Restore settings
+    // Khôi phục cài đặt
     autoCb.checked = !!getSettings().autoRun;
     autoCb.addEventListener("change", e => saveSettings({ autoRun: e.target.checked }));
 
-    // Check pool first
+    // Kiểm tra Pool xem đã có sẵn domain cho key này chưa
     const pool = getPool();
-    if (pool[taskKey]?.url) {
+    if (pool[taskKey] && pool[taskKey].url) {
       urlIn.value = pool[taskKey].url;
       setBadge("Đã có trong Pool", "info");
       setLog("✨ Database: " + pool[taskKey].url);
       if (autoCb.checked) setTimeout(doStart, 900);
     } else {
-      setTimeout(() => doScan(taskKey), 1000);
+      setTimeout(() => doScan(taskKey), 1200);
     }
 
     $id("gt-rescan").onclick = () => doScan(taskKey);
@@ -347,52 +600,41 @@
     $id("gt-start").onclick  = doStart;
     $id("gt-pool").onclick   = showPool;
 
-    // Sync countdown badge from tab ngầm
+    // Lắng nghe thay đổi từ tab ngầm (countdown + copy code)
     if (typeof GM_addValueChangeListener === "function") {
       GM_addValueChangeListener(KEY_PING, (_, __, v) => {
-        if (v?.key === taskKey) {
-          setBadge(`Đang ủ: ${v.seconds}s`, "info");
-          setLog(`⏳ Tab ngầm đếm ngược: ${v.seconds}s`);
+        if (v && v.key === taskKey) {
+          setBadge("Đang ủ: " + v.seconds + "s", "info");
+          setLog("⏳ Tab ngầm đếm ngược: " + v.seconds + "s");
         }
       });
       GM_addValueChangeListener(KEY_DONE, (_, __, v) => {
-        if (v?.key === taskKey && v.code) {
+        if (v && v.key === taskKey && v.code) {
           setBadge("Hoàn thành!", "ok");
           setLog("🎉 Mã: [ " + v.code + " ]", "#22c55e");
           copyToClipboard(v.code);
-          // Điền tự động vào form GTraffic nếu có
           const inp = document.querySelector('input[id*="code"],input[name*="code"],input[placeholder*="mã"],.form-control[type="text"]');
-          if (inp) { inp.value = v.code; inp.dispatchEvent(new Event("input", {bubbles:true})); }
+          if (inp) { inp.value = v.code; inp.dispatchEvent(new Event("input", { bubbles: true })); }
         }
       });
     }
 
-    // ── SCAN OCR ─────────────────────────────────────────────────────────
+    // ── SCAN OCR ─────────────────────────────────────────────────────────────
     function doScan(key) {
       setBadge("Đang quét...", "info");
       setLog("🔍 Tìm ảnh nhiệm vụ trên trang...");
 
-      // Selector ưu tiên theo đặc điểm DOM thật của GTraffic
-      const img = document.querySelector('img[alt="Anh tim kiem"]')
-                || document.querySelector('img[src*="cdn.gtraffic.io"]')
-                || document.querySelector('img[srcset*="cdn.gtraffic.io"]')
-                || (() => {
-                    for (const i of document.querySelectorAll("img")) {
-                      const pt = i.closest("div,section,p")?.innerText || "";
-                      if (/bước\s*0?2/i.test(pt) || /tìm.+truy.+cập/i.test(pt)) return i;
-                    }
-                  })();
+      const img = findTaskImage();
 
       if (!img) {
         setBadge("Không thấy ảnh", "err");
-        setLog("❌ Chưa thấy ảnh nhiệm vụ. Nhập link tay hoặc chờ trang tải xong!");
+        setLog("❌ Chưa thấy ảnh nhiệm vụ. Nhập link tay hoặc đợi trang tải!");
         return;
       }
 
       const src = img.currentSrc || img.src || (img.srcset || "").split(" ")[0];
       setLog("📡 Tải ảnh từ CDN (kèm Referer)...");
 
-      // Tải ảnh qua GM để bypass CDN 403
       GM_xmlhttpRequest({
         method: "GET", url: src,
         headers: { Referer: location.href, Accept: "image/*,*/*" },
@@ -409,6 +651,36 @@
         },
         onerror() { canvasOcr(img, key); }
       });
+    }
+
+    function findTaskImage() {
+      // 1. Selector alt/src chuẩn
+      const byAlt = document.querySelector('img[alt*="tim kiem" i], img[alt*="tìm kiếm" i]');
+      if (byAlt) return byAlt;
+
+      const byCdn = document.querySelector('img[src*="cdn.gtraffic.io"], img[src*="/i?t="]');
+      if (byCdn) return byCdn;
+
+      const bySrcset = document.querySelector('img[srcset*="cdn.gtraffic.io"]');
+      if (bySrcset) return bySrcset;
+
+      // 2. Tìm theo thẻ chứa text Bước 2
+      for (const i of document.querySelectorAll("img")) {
+        const parent = i.closest("div,section,article,p");
+        if (!parent) continue;
+        const txt = parent.innerText || "";
+        if (/bước\s*0?2/i.test(txt) || /tìm.+truy.+cập/i.test(txt) || /link.+nhiệm.+vụ/i.test(txt)) {
+          return i;
+        }
+      }
+
+      // 3. Fallback ảnh nội dung lớn
+      for (const i of document.querySelectorAll("img")) {
+        if (i.src && i.src.includes("logo")) continue;
+        const area = (i.naturalWidth || i.width || 0) * (i.naturalHeight || i.height || 0);
+        if (area > 15000) return i;
+      }
+      return null;
     }
 
     function canvasOcr(img, key) {
@@ -429,7 +701,7 @@
       const fd = new FormData();
       fd.append("apikey", OCR_API_KEY);
       fd.append("base64Image", b64);
-      fd.append("language", "eng");         // eng = Latin charset, không lỗi E201
+      fd.append("language", "eng");
       fd.append("isOverlayRequired", "false");
       fd.append("OCREngine", "2");
       fd.append("scale", "true");
@@ -440,9 +712,9 @@
         onload(res) {
           try {
             const json = JSON.parse(res.responseText);
-            const text = json?.ParsedResults?.[0]?.ParsedText || "";
+            const text = json && json.ParsedResults && json.ParsedResults[0] ? json.ParsedResults[0].ParsedText : "";
             if (!text) {
-              const errMsg = json?.ErrorMessage?.[0] || "OCR trả về rỗng";
+              const errMsg = (json && json.ErrorMessage && json.ErrorMessage[0]) || "OCR trả về rỗng";
               setBadge("Lỗi OCR", "err");
               setLog("❌ " + errMsg);
               return;
@@ -459,25 +731,22 @@
       });
     }
 
-    // ── PARSE DOMAIN (không ping, không recover) ──────────────────────────
+    // ── PARSE DOMAIN ─────────────────────────────────────────────────────────
     function handleOcrText(raw, key) {
-      // Loại bỏ TẤT CẢ ký tự non-ASCII ngay từ đầu
       const clean = raw.replace(/[^\x20-\x7E\n]/g, " ");
-
-      // Tìm domain tốt nhất theo thứ tự ưu tiên
       const domain = extractDomain(clean);
 
       if (!domain) {
         setBadge("Không tìm thấy", "err");
-        setLog("⚠️ OCR không thấy domain rõ ràng. Vui lòng nhập tay!");
+        setLog("⚠️ OCR không thấy domain rõ. Vui lòng nhập tay!");
         return;
       }
 
       const finalUrl = sanitizeUrl(domain);
       if (!finalUrl) {
         setBadge("URL không hợp lệ", "err");
-        setLog("⚠️ Domain OCR ra bị lỗi ký tự. Nhập tay: " + domain);
-        urlIn.value = domain; // để user tự sửa
+        setLog("⚠️ Domain bị lỗi ký tự. Nhập tay: " + domain);
+        urlIn.value = domain;
         return;
       }
 
@@ -485,7 +754,7 @@
       setBadge("Đã nhận diện ✓", "ok");
       setLog("✅ " + finalUrl);
 
-      // Lưu Pool
+      // Lưu vào Pool Database
       const p = getPool();
       p[key] = { url: finalUrl, date: Date.now() };
       savePool(p);
@@ -494,26 +763,24 @@
     }
 
     function extractDomain(cleanText) {
-      const TLD = "com\\.vn|net\\.vn|org\\.vn|com|vn|net|org|co|in|io|top|club|xyz|site|vip|cc|biz|info|live|app|win|bet|me|online|tv|news|blog|store";
-      const re  = new RegExp(`(?:https?:\\/\\/)?([a-zA-Z0-9][a-zA-Z0-9_\\-]{1,})\\.(?:${TLD})`, "gi");
+      const TLD = "com\\.vn|net\\.vn|org\\.vn|edu\\.vn|com|vn|net|org|co|in|io|top|club|xyz|site|vip|cc|biz|info|live|app|win|bet|me|online|tv|news|blog|store|game|click|link|work|cash|bid";
+      const re  = new RegExp(`(?:https?:\\/\\/)?([a-zA-Z0-9][a-zA-Z0-9_\\-]{1,})\\.(?:${TLD})(?:\\/[^\\s]*)?`, "gi");
 
       const candidates = [];
       let m;
       while ((m = re.exec(cleanText)) !== null) {
-        const full = m[0].replace(/^https?:\/\//i,"").replace(/[.*_~-]+$/,"");
-        // Lọc bỏ domain không có nghĩa / quá ngắn
-        if (full.length > 5 && !full.startsWith("gtraffic")) {
+        const full = m[0].replace(/^https?:\/\//i, "").replace(/[.*_~-]+$/, "").split(/\s/)[0];
+        if (full.length > 5 && !full.startsWith("gtraffic") && !full.startsWith("ocr.space")) {
           candidates.push(full);
         }
       }
       if (!candidates.length) return null;
 
-      // Ưu tiên domain dài nhất (thường là domain thật, tránh nhầm tên chương trình)
-      candidates.sort((a,b) => b.length - a.length);
+      candidates.sort((a, b) => b.length - a.length);
       return candidates[0];
     }
 
-    // ── START EXECUTION ───────────────────────────────────────────────────
+    // ── START EXECUTION ──────────────────────────────────────────────────────
     function doStart() {
       const raw = urlIn.value.trim();
       if (!raw) { alert("Vui lòng quét hoặc nhập URL trước!"); return; }
@@ -538,12 +805,13 @@
       }
     }
 
-    // ── POOL MODAL ────────────────────────────────────────────────────────
+    // ── POOL MODAL ───────────────────────────────────────────────────────────
     function showPool() {
+      if (document.querySelector(".gt-overlay")) return;
       const ov = document.createElement("div");
       ov.className = "gt-overlay";
-      const pool = getPool();
-      const entries = Object.entries(pool);
+      const poolData = getPool();
+      const entries  = Object.entries(poolData);
       ov.innerHTML = `
 <div class="gt-modal">
   <div class="gt-modal-hdr">
@@ -551,7 +819,7 @@
     <button id="gp-close" style="background:none;border:none;color:#f1f5f9;font-size:18px;cursor:pointer">✕</button>
   </div>
   <div class="gt-pool-list" id="gp-list">
-    ${entries.length ? entries.map(([k,v])=>`
+    ${entries.length ? entries.map(([k,v]) => `
       <div class="gt-pi" data-k="${k}">
         <span class="gt-pi-key">${k}</span>
         <span class="gt-pi-url" title="${v.url}">${v.url}</span>
@@ -566,13 +834,16 @@
       document.body.appendChild(ov);
       const close = () => ov.remove();
       ov.querySelector("#gp-close").onclick = close;
-      ov.querySelector("#gp-ok").onclick = close;
-      ov.querySelector("#gp-clear").onclick = () => { if (confirm("Xóa toàn bộ Pool?")) { savePool({}); close(); } };
+      ov.querySelector("#gp-ok").onclick    = close;
+      ov.querySelector("#gp-clear").onclick = () => {
+        if (confirm("Xóa toàn bộ Pool?")) { savePool({}); close(); }
+      };
       ov.querySelectorAll(".gt-pi-del").forEach(b => b.onclick = () => {
         const k = b.dataset.k;
         const p = getPool(); delete p[k]; savePool(p);
         b.closest(".gt-pi").remove();
       });
+      ov.addEventListener("click", e => { if (e.target === ov) close(); });
     }
   }
 

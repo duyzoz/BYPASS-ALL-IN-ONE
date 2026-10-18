@@ -1,16 +1,15 @@
 // ==UserScript==
 // @name         GTraffic Bypass (Duyzoz)
 // @namespace    https://gtraffic.io/
-// @version      2.3.0
-// @description  Công cụ bypass tự động GTraffic All-In-One với OCR nhận diện ảnh & chạy tab ngầm lấy mã tự động bởi Duyzoz
+// @version      2.4.0
+// @description  Bypass tự động GTraffic - OCR nhận diện ảnh, tab ngầm đếm ngược, tự copy mã
 // @match        https://gtraffic.io/*
 // @match        http://gtraffic.io/*
-// @match        *://*/*
 // @run-at       document-start
 // @icon         https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/assets/icon.png
-// @author       Duyzoz (@duyzoz)
-// @updateURL    https://github.com/duyzoz/BYPASS-ALL-IN-ONE/raw/refs/heads/main/gtraffic.user.js
-// @downloadURL  https://github.com/duyzoz/BYPASS-ALL-IN-ONE/raw/refs/heads/main/gtraffic.user.js
+// @author       Duyzoz
+// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js
+// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.user.js
 // @require      https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/gtraffic.js
 // @connect      api.ocr.space
 // @connect      cdn.gtraffic.io
@@ -26,9 +25,5 @@
 // @grant        window.close
 // ==/UserScript==
 
-/**
- * GTraffic Bypass All-In-One (Duyzoz Edition)
- * Source repo: https://github.com/duyzoz/BYPASS-ALL-IN-ONE
- * Cài đặt file chính này vào Tampermonkey / Violentmonkey trên trình duyệt.
- */
-console.log("[GTraffic Bypass] Userscript Loader v2.3.0 đã sẵn sàng!");
+// Loader – core logic nằm trong gtraffic.js (required ở trên)
+// Tampermonkey tự inject @require trước khi chạy file này

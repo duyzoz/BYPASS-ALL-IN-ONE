@@ -1,11 +1,9 @@
 // ==UserScript==
-// @name         Link4m Bypass — Remake (deobf + patches)
+// @name         Link4m (n1ulls) - Full Deobfuscated Source
 // @namespace    http://tampermonkey.net/
-// @version      0.6.5
-// @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
-// @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
-// @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
-// @downloadURL  https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
+// @version      0.1
+// @description  Ban giai ma hoan nguyen 100% ma nguon goc day du (~1500 dong) cua Link4m (n1ulls) - Khong may ao VM, Shadow DOM, OCR Engine, Widget Protocol, Multi-Step Countdown
+// @author       n1ulls (Deobfuscated by Community)
 // @match        https://link4m.net/*
 // @match        https://link4m.com/*
 // @match        https://*.link4m.net/*
@@ -116,24 +114,6 @@
         }
     })();
 
-    // [PATCH v0.6 P1] _traffic_cid_: ban deobf khong co _traffic_cid_ o bat cu cho nao
-    // (da grep: 0 hit trong file nay, 0 hit trong cac file khac cua Dut, chuoi goc nam trong
-    // kho string ma hoa cua VM 445KB nen khong doc duoc). Ham nay chi SINH + LUU id cuc bo
-    // (dinh dang giong ban dump goc: 'cid-' + random hex + timestamp hex) qua GM_getValue /
-    // GM_setValue duoi khoa '_traffic_cid_'. KHONG gan id vao bat cu request nao — khong co
-    // file deobf nao cho thay request nao mang cid, nen vi tri tren day (wire placement) doi
-    // quan sat live tab Network tren link4m.org/go/VDcp1 roi moi gan, khong bia param.
-    function getClientId() {
-        try {
-            let id = (typeof GM_getValue === 'function') ? GM_getValue('_traffic_cid_', null) : null;
-            if (!id) {
-                id = 'cid-' + Math.random().toString(16).slice(2) + Date.now().toString(16);
-                if (typeof GM_setValue === 'function') GM_setValue('_traffic_cid_', id);
-            }
-            return id;
-        } catch (e) { return null; }
-    }
-
     // =========================================================================
     // 3. HTTP NETWORKING WRAPPER (GM / fetch fallback)
     // =========================================================================
@@ -146,21 +126,11 @@
                 reqFn({
                     method: (options.method || 'GET').toUpperCase(),
                     url: options.url,
-                    // [PATCH v0.6.1] Header giong trinh duyet that, khong giong bot.
-                    // Bang chung live 2026-11-08 tren 789-club.cc (Cloudflare):
-                    // curl voi header kieu GM_xhr cu (Accept: */*, khong Referer)
-                    // bi cat ket noi tan goc (HTTP 000 = onerror trong GM_xhr),
-                    // trong khi tab Chrome that mo ngon (navigation + cookie
-                    // cf_clearance sau khi qua thu thach). Header cu la tin hieu
-                    // bot ro nhat nen doi: Accept dang text/html nhu tab that,
-                    // them Referer tu trang link4m, bo Cache-Control/Pragma
-                    // no-cache (cung la dau hieu bot). GM_xmlhttpRequest van gui
-                    // cookie cua domain (ke ca cf_clearance) nen mo tab trang
-                    // dich qua kiem tra 1 lan roi bam lai co the qua duoc.
                     headers: Object.assign({
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                        'Accept': '*/*',
                         'Accept-Language': 'vi,en;q=0.9,en-US;q=0.8',
-                        'Referer': (typeof location !== 'undefined' ? location.href : '')
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
                     }, options.headers || {}),
                     data: options.data || null,
                     responseType: options.responseType || '',
@@ -174,9 +144,7 @@
                             finalUrl: res.finalUrl || options.url
                         });
                     },
-                    // [PATCH v0.6.1] Loi mang kem luon URL de lan sau nhin la biet
-                    // request nao chet, khong phai doan.
-                    onerror: function (err) { reject(new Error((err.statusText || 'Loi mang khi gui request') + ' — URL: ' + options.url)); },
+                    onerror: function (err) { reject(new Error(err.statusText || 'Loi mang khi gui request')); },
                     ontimeout: function () { reject(new Error('Het thoi gian cho ket noi (Timeout)')); },
                     onabort: function () { reject(new Error('Yeu cau bi huy (Abort)')); }
                 });
@@ -222,17 +190,12 @@
         goBtn: null,
         btnStore: null,
         btnServer: null,
-        btnSubmitNow: null,
-        // [PATCH v0.6.2] O dan tay URL widget.
-        wfallback: null,
-        wurlInput: null,
-        btnWidgetGo: null,
         btnMin: null,
         resultBox: null,
         rurl: null,
         rCopy: null,
         rOpen: null,
-        version: "0.6.0",
+        version: "0.1",
 
         init() {
             if (document.getElementById('l4m-bypass-host')) return;
@@ -600,31 +563,6 @@
     box-shadow: none;
 }
 
-/* [PATCH v0.6.2] O dan tay URL widget khi khong tai duoc trang dich. */
-.wfallback {
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-    padding: 0 14px 13px;
-}
-.wfallback.on {
-    display: flex;
-}
-.wftag {
-    font-size: 12px;
-    font-weight: 700;
-    color: #ffb4a8;
-    line-height: 1.4;
-}
-.wfhelp {
-    font-size: 11px;
-    line-height: 1.5;
-    color: #93a3bd;
-}
-.wfhelp b {
-    color: #e9f4fa;
-}
-
 .links {
     display: flex;
     gap: 8px;
@@ -675,25 +613,6 @@
     border-color: rgba(156,172,255,.7);
     box-shadow: 0 6px 18px rgba(114,137,218,.24), inset 0 1px 0 rgba(255,255,255,.14);
     filter: brightness(1.06);
-}
-
-/* [PATCH v0.6 P3] Nut "Nop ngay": cam, chi bat khi da co ma widget. */
-.lbtn.submitnow {
-    background: linear-gradient(135deg, rgba(234,88,12,.28), rgba(249,115,22,.12));
-    border: 1px solid rgba(251,146,60,.5);
-    color: #ffedd5;
-}
-
-.lbtn.submitnow:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(234,88,12,.4), rgba(249,115,22,.2));
-    border-color: rgba(251,146,60,.8);
-    box-shadow: 0 6px 18px rgba(234,88,12,.3), inset 0 1px 0 rgba(255,255,255,.14);
-    filter: brightness(1.06);
-}
-
-.lbtn:disabled {
-    opacity: .45;
-    cursor: not-allowed;
 }
 
 .result {
@@ -960,19 +879,8 @@ button:focus-visible {
                         <div class="links">
                             <button class="lbtn store" id="btnStore" type="button">My Store</button>
                             <button class="lbtn server" id="btnServer" type="button">My Server</button>
-                            <button class="lbtn submitnow" id="btnSubmitNow" type="button" disabled>Nộp ngay</button>
                         </div>
                     </form>
-                    <!-- [PATCH v0.6.2] Duong vong khi khong tai duoc trang dich (Cloudflare). -->
-                    <div class="wfallback" id="wfallback">
-                        <div class="wftag">⛔ Không tải được trang đích (Cloudflare chặn bot) — chạy thẳng widget:</div>
-                        <div class="urlwrap">
-                            <span class="uic">🧩</span>
-                            <input class="url" id="wurl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Dán URL widget (…/widget/service.js?key=…)">
-                        </div>
-                        <button class="go" id="wgo" type="button">Chạy widget</button>
-                        <div class="wfhelp">Mở tab trang đích → Ctrl+U xem source → tìm dòng <b>widget/service.js?key=</b> → copy nguyên URL đó dán vào đây.</div>
-                    </div>
                     <div class="result" id="result">
                         <div class="rtag">✓ URL của bạn</div>
                         <div class="rurl" id="rurl"></div>
@@ -1004,10 +912,6 @@ button:focus-visible {
             this.goBtn = this.shadow.getElementById('go');
             this.btnStore = this.shadow.getElementById('btnStore');
             this.btnServer = this.shadow.getElementById('btnServer');
-            this.btnSubmitNow = this.shadow.getElementById('btnSubmitNow');
-            this.wfallback = this.shadow.getElementById('wfallback');
-            this.wurlInput = this.shadow.getElementById('wurl');
-            this.btnWidgetGo = this.shadow.getElementById('wgo');
             this.btnMin = this.shadow.getElementById('btnMin');
             this.resultBox = this.shadow.getElementById('result');
             this.rurl = this.shadow.getElementById('rurl');
@@ -1029,18 +933,6 @@ button:focus-visible {
 
             this.btnStore.onclick = () => window.open(CONFIG.storeUrl, '_blank');
             this.btnServer.onclick = () => window.open(CONFIG.serverUrl, '_blank');
-
-            // [PATCH v0.6 P3] Nut "Nop ngay": chi khi nguoi dung bam tay moi goi submitFinalLink()
-            // (POST /links/get-link-info + cho captcha). Chua co ma thi bao, khong lam gi.
-            if (this.btnSubmitNow) {
-                this.btnSubmitNow.onclick = () => {
-                    if (Engine.pendingCode) {
-                        Engine.submitFinalLink(Engine.pendingCode);
-                    } else {
-                        this.setStatus('Chưa có mã để nộp — chạy widget lấy mã trước', 'warn');
-                    }
-                };
-            }
 
             this.rCopy.onclick = () => {
                 const link = this.rurl.textContent.trim();
@@ -1068,18 +960,6 @@ button:focus-visible {
                 }
                 Engine.runManualUrlBypass(u);
             };
-
-            // [PATCH v0.6.2] Nut chay thang widget tu URL dan tay.
-            if (this.btnWidgetGo) {
-                this.btnWidgetGo.onclick = () => {
-                    const u = this.wurlInput ? this.wurlInput.value.trim() : '';
-                    if (!u) {
-                        this.setStatus('✗ Chưa dán URL widget', 'err');
-                        return;
-                    }
-                    Engine.runWidgetFromUrl(u);
-                };
-            }
         },
 
         setStatus(msg, type = 'info', showSpin = false) {
@@ -1103,11 +983,6 @@ button:focus-visible {
             if (this.notice) this.notice.style.display = 'none';
         },
 
-        // [PATCH v0.6.2] Hien o dan tay URL widget khi khong tai duoc trang dich.
-        showWidgetFallback() {
-            if (this.wfallback) this.wfallback.classList.add('on');
-        },
-
         setProgress(percent) {
             if (this.cdfill) {
                 this.cdfill.style.width = Math.min(100, Math.max(0, percent)) + '%';
@@ -1129,15 +1004,6 @@ button:focus-visible {
             this.setStatus('✓ Lấy URL thành công', 'ok', false);
             this.hideNotice();
             this.setProgress(100);
-        },
-
-        // [PATCH v0.6 P3] Bat/tat nut "Nop ngay" theo viec da co ma hay chua.
-        enableSubmitNow() {
-            if (this.btnSubmitNow) this.btnSubmitNow.disabled = false;
-        },
-
-        disableSubmitNow() {
-            if (this.btnSubmitNow) this.btnSubmitNow.disabled = true;
         },
 
         enableInput() {
@@ -1297,17 +1163,6 @@ button:focus-visible {
             const regexStr = '^' + maskPattern.replace(/[.+?^$${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*') + '$';
             const re = new RegExp(regexStr, 'i');
             return re.test(rawDomain);
-        },
-
-        // [PATCH v0.6 P2] Trich mat na domain o Buoc 3 (vd: 'kqbd***.site') tu text trang.
-        // Chi tra ve token co chua '*'; domain day du binh thuong (khong co '*') tra ve null.
-        extractMaskFromText(text) {
-            if (!text) return null;
-            const tokens = text.match(/[a-z0-9][a-z0-9\-*]{1,61}\.[a-z*]{2,}(?:\.[a-z*]{2,})?/gi) || [];
-            for (const t of tokens) {
-                if (t.includes('*')) return t.toLowerCase();
-            }
-            return null;
         }
     };
 
@@ -1315,11 +1170,6 @@ button:focus-visible {
     // 7. WIDGET PROTOCOL & MULTI-STEP COUNTDOWN ENGINE
     // =========================================================================
     const Engine = {
-        // [PATCH v0.6 P3] Ma widget lay duoc giu o day cho nut "Nop ngay" bam tay.
-        pendingCode: null,
-        // [PATCH v0.6.5] Domain widget vua chay (de hien len status khi dien ma).
-        lastWidgetDomain: null,
-
         findWidgetScriptUrls(html) {
             const matches = [];
             const re = /<script[^>]+src=["'](?:https?:)?\/\/([^\/"']+)\/widget\/(service(?:-v\d+)?\.js)\?([^"']*)["']/gi;
@@ -1333,38 +1183,6 @@ button:focus-visible {
                 });
             }
             return matches;
-        },
-
-        // [PATCH v0.6.2] Parse 1 URL widget dan tay (tu view-source tab trang dich),
-        // dung cung regex nhu findWidgetScriptUrls nhung ap cho 1 URL don.
-        // Chap nhan co/khong co scheme: https://host/widget/service.js?key=...
-        parseWidgetUrl(url) {
-            if (!url) return null;
-            const m = String(url).trim().match(/^(?:https?:)?\/\/?([^\s\/]+)\/widget\/(service(?:-v\d+)?\.js)\?([^"'\s]*)/i);
-            if (!m) return null;
-            return { domain: m[1], file: m[2], query: m[3], fullUrl: `https://${m[1]}/widget/${m[2]}?${m[3]}` };
-        },
-
-        // [PATCH v0.6.2] Chay thang widget tu URL dan tay, bo qua buoc GET trang dich
-        // (buoc dang chet vi Cloudflare cat ket noi tan goc). Sau do van fill-only
-        // nhu P3: lay ma -> dien vao o code -> dung, khong tu nop.
-        async runWidgetFromUrl(url) {
-            const w = this.parseWidgetUrl(url);
-            if (!w) {
-                UI.setStatus('✗ URL widget không đúng dạng — cần dạng https://<host>/widget/service.js?key=…', 'err');
-                return;
-            }
-            UI.disableInput('Đang chạy widget…');
-            try {
-                const code = await this.executeWidgetWorkflow(w);
-                if (code) this.fillCodeOnly(code);
-                else UI.setStatus('⊘ Không lấy được mã từ widget', 'warn');
-            } catch (err) {
-                const msg = String(err && err.message || err);
-                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(w.domain) === -1 ? ' — widget: ' + w.domain : ''), 'err');
-            } finally {
-                UI.enableInput();
-            }
         },
 
         extractPageTaskData() {
@@ -1383,69 +1201,16 @@ button:focus-visible {
             return { html, text, alias, campaign_id, display_id, prefix, taskId };
         },
 
-        // [PATCH v0.6.5] Trich ma that tu response verify — KHONG lay token dau tien.
-        // Loi goc (bro test live 2026-11-08): regex /["']?([A-Za-z0-9_-]{5,25})["']?/
-        // lay token alnum dau tien trong response, ma response JSON bat dau bang
-        // {"success":true,...} nen no lay luon chu "success" lam ma. Day la cung
-        // dang loi "first-token" cua Dut ma v0.5 tung sua bang JSON co cau truc.
-        // Thu tu: (1) JSON.parse -> doc field code/quest_code (ke ca data.*),
-        // (2) token regex nhung BO QUA tu khoa JSON (success/status/result/...),
-        // (3) sessionData.code cuoi cung (cung loc tu khoa). Khong co gi khop -> ''.
-        // Chi log TEN FIELD (khong log gia tri) de chan doan ma khong lo ma that.
-        // [PATCH v0.6.5] Nghi pham chinh cho "ma nao cung la u00f4ng": verify response
-        // echo lai WIDGET KEY (id cua widget, giong nhau moi nhiem vu) — vd
-        // {"success":true,"key":"u00f4ng",...} khong co field code — parser cu quet
-        // token thi vot trung key vi "key" chi co 3 ky tu (<5) nen regex bo qua ten
-        // field ma lay luon GIA TRI key lam ma. Fix: (a) loai tru key + session khoi
-        // moi ung vien (tham so exclude), (b) doc them field token/captcha_code/
-        // code_text/questcode/passcode + result/data DANG CHUOI (ma thang, khong
-        // phai object), (c) neu chi co key ma khong co ma that thi tra '' chu
-        // khong doan bua.
-        extractVerifyCode(text, sessionData, exclude) {
-            const KEYWORDS = ['success', 'status', 'result', 'message', 'error', 'failed', 'failure', 'true', 'false', 'null', 'undefined', 'data', 'code', 'quest', 'quest_code', 'verify', 'valid', 'invalid', 'ok', 'okay', 'done', 'complete', 'completed', 'session', 'traffic_session', 'totalstep', 'traffic_wait_time', 'traffic_step_2_wait_time', 'action', 'get_code', 'key'];
-            const excluded = new Set((exclude || []).filter(Boolean).map(String));
-            const isKeyword = (s) => !s || KEYWORDS.indexOf(String(s).toLowerCase()) !== -1 || excluded.has(String(s));
-            const pick = (v) => (typeof v === 'string' && v.trim() && !isKeyword(v.trim()) ? v.trim() : '');
-            let parsed = null;
-            try { parsed = JSON.parse(text || ''); } catch (e) {}
-            if (parsed && typeof parsed === 'object') {
-                try { console.log('[Link4M Widget] Verify response keys:', Object.keys(parsed)); } catch (e) {}
-                const fromTop = pick(parsed.code) || pick(parsed.quest_code) || pick(parsed.code_value) || pick(parsed.result_code) || pick(parsed.token) || pick(parsed.captcha_code) || pick(parsed.code_text) || pick(parsed.questcode) || pick(parsed.passcode);
-                if (fromTop) return fromTop;
-                // result/data co the la CHUOI ma thang (khong phai object).
-                if (typeof parsed.result === 'string') { const r = pick(parsed.result); if (r) return r; }
-                if (typeof parsed.data === 'string') { const d = pick(parsed.data); if (d) return d; }
-                const nested = parsed.data || parsed.result;
-                if (nested && typeof nested === 'object') {
-                    const fromNested = pick(nested.code) || pick(nested.quest_code) || pick(nested.token) || pick(nested.captcha_code);
-                    if (fromNested) return fromNested;
-                }
-            }
-            const tokens = (text || '').match(/[A-Za-z0-9_-]{5,25}/g) || [];
-            for (const t of tokens) {
-                if (!isKeyword(t)) return t;
-            }
-            if (sessionData) return pick(sessionData.code) || pick(sessionData.quest_code);
-            return '';
-        },
-
         async executeWidgetWorkflow(widgetObj) {
             UI.setStatus(`Đang kết nối widget: ${widgetObj.domain}…`, 'info', true);
-            // [PATCH v0.6.5] Ghi lai domain widget vua chay de hien len status khi
-            // dien ma xong (chup anh la thay ngay ma lay tu widget nao).
-            this.lastWidgetDomain = widgetObj.domain;
 
-            // [PATCH v0.6.5] Chong cache: them &_t=timestamp vao moi GET widget.
-            // v0.6.1 da bo header no-cache de giong trinh duyet, nen trinh duyet
-            // co the tra response widget CU (cung URL = cung session + cung ma).
-            const bust = () => '&_t=' + Date.now();
-            const scriptRes = await httpReq({ method: 'GET', url: widgetObj.fullUrl + bust() });
+            const scriptRes = await httpReq({ method: 'GET', url: widgetObj.fullUrl });
             const sCode = scriptRes.responseText || '';
 
             const keyMatch = widgetObj.query.match(/(?:^|&)key=([^&"'\s]+)/);
             const key = keyMatch ? keyMatch[1] : '';
 
-            const sessionInitUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=init${bust()}`;
+            const sessionInitUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=init`;
             let sessionRes;
             try {
                 sessionRes = await httpReq({ method: 'GET', url: sessionInitUrl });
@@ -1469,7 +1234,7 @@ button:focus-visible {
 
             if (totalStep >= 2) {
                 UI.setStatus('Qua bước 2…', 'info', true);
-                const step2Url = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&step=2&traffic_session=${encodeURIComponent(sessionData.session || '')}${bust()}`;
+                const step2Url = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&step=2&traffic_session=${encodeURIComponent(sessionData.session || '')}`;
                 await httpReq({ method: 'GET', url: step2Url }).catch(() => {});
 
                 for (let rem = waitTimeStep2; rem >= 0; rem--) {
@@ -1479,66 +1244,17 @@ button:focus-visible {
             }
 
             UI.setStatus('Đang lấy mã xác thực…', 'info', true);
-            const verifyUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=verify&traffic_session=${encodeURIComponent(sessionData.session || '')}${bust()}`;
+            const verifyUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=verify&traffic_session=${encodeURIComponent(sessionData.session || '')}`;
             const verifyRes = await httpReq({ method: 'GET', url: verifyUrl });
 
-            // [PATCH v0.6.5] Loai tru widget KEY + session khoi ung vien ma — key la id
-            // cua widget (giong nhau moi nhiem vu), khong phai ma. Xem extractVerifyCode.
-            const finalCode = this.extractVerifyCode(verifyRes.responseText, sessionData, [key, sessionData.session]);
+            let finalCode = '';
+            if (verifyRes.responseText) {
+                const jsonMatch = verifyRes.responseText.match(/["']?([A-Za-z0-9_-]{5,25})["']?/);
+                if (jsonMatch) finalCode = jsonMatch[1];
+            }
+
+            if (!finalCode && sessionData.code) finalCode = sessionData.code;
             return finalCode;
-        },
-
-        // [PATCH v0.6 P3] Chi dien ma vao o code cua trang + o nhap cua panel, KHONG POST,
-        // KHONG goi submitFinalLink. Nguoi dung tu bam "Nop ngay" de nop + tu giai captcha.
-        // [PATCH v0.6.4] Kiem tra lai gia tri that su nam trong o code cua trang.
-        // Loi goc (bro test live 2026-11-08): panel hien "u00f4ng" (7 ky tu) nhung o
-        // code tren trang chi co "u00f4n" (6 ky tu) — trang bao "Ma khong hop le".
-        // Trinh duyet that cat .value theo maxlength, va input kieu React chi nhan
-        // gia tri qua native setter — nen dien bang setter goc + doc lai ngay sau
-        // khi dien. Neu thieu ky tu thi bao ro, pendingCode van giu ma day du de
-        // nut "Nop ngay" gui dung ma (no POST truc tiep, khong doc o tren trang).
-        verifyPageFill(pageInput, code) {
-            if (!pageInput) return { ok: false, filledLen: 0, maxLen: -1 };
-            const filled = pageInput.value || '';
-            const maxAttr = pageInput.getAttribute('maxlength');
-            const maxLen = maxAttr ? parseInt(maxAttr, 10) : -1;
-            return { ok: filled === code, filledLen: filled.length, maxLen: isNaN(maxLen) ? -1 : maxLen };
-        },
-
-        fillCodeOnly(code) {
-            if (!code) return;
-            this.pendingCode = code;
-            const pageCodeInput = document.querySelector('input[name="code"], input#code, input[placeholder*="mã"], input[placeholder*="code"]');
-            let fillCheck = null;
-            if (pageCodeInput) {
-                // Native setter: input kieu React/Vue chi cap nhat state khi gia tri
-                // di qua setter goc cua HTMLInputElement (gan .value thuong bi bo qua).
-                try {
-                    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                    if (setter) setter.call(pageCodeInput, code);
-                    else pageCodeInput.value = code;
-                } catch (e) {
-                    pageCodeInput.value = code;
-                }
-                pageCodeInput.dispatchEvent(new Event('input', { bubbles: true }));
-                pageCodeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                fillCheck = this.verifyPageFill(pageCodeInput, code);
-                if (!fillCheck.ok) {
-                    try {
-                        console.log('[Link4M] O ma trang chi nhan ' + fillCheck.filledLen + '/' + code.length + ' ky tu' + (fillCheck.maxLen > 0 ? ' (maxlength=' + fillCheck.maxLen + ')' : '') + ' — gui bang nut "Nop ngay" de dung ma day du.');
-                    } catch (e) {}
-                }
-            }
-            if (UI.urlInput) UI.urlInput.value = code;
-            UI.enableSubmitNow();
-            // [PATCH v0.6.5] Kem ten widget domain vao status thanh cong de chup anh
-            // la thay ngay ma lay tu widget nao (chan doan "ma nao cung giong nhau").
-            const srcTag = this.lastWidgetDomain ? ` · widget: ${this.lastWidgetDomain}` : '';
-            if (fillCheck && !fillCheck.ok) {
-                UI.setStatus(`⚠️ Ô mã trên trang chỉ nhận ${fillCheck.filledLen}/${code.length} ký tự — giải captcha rồi bấm Nộp ngay trong panel để gửi mã đầy đủ`, 'warn', false);
-            } else {
-                UI.setStatus(`Đã có mã — đã điền, bro tự bấm Nộp + giải captcha để ra link đích${srcTag}`, 'ok', false);
-            }
         },
 
         async submitFinalLink(code) {
@@ -1622,17 +1338,6 @@ button:focus-visible {
 
             try {
                 const res = await httpReq({ method: 'GET', url: taskUrl });
-                // [PATCH v0.6.1] Trang dich dung Cloudflare chan bot: tra 403
-                // + trang thu thach "Just a moment..." (chua challenges.cloudflare.com).
-                // GM_xhr khong giai duoc thu thach JS, nhung mo tab trang dich qua
-                // kiem tra 1 lan se co cookie cf_clearance, bam lai co the qua.
-                // Bao ro nguyen nhan thay vi bao chung chung "khong truy cap duoc".
-                if (res.status === 403 && /challenges\.cloudflare\.com|Just a moment/i.test(res.responseText || '')) {
-                    UI.setStatus('⛔ Trang đích chặn bot (Cloudflare) — mở tab trang đích qua kiểm tra 1 lần rồi bấm Bắt đầu lại, hoặc dán URL widget vào ô dưới để chạy thẳng', 'err');
-                    UI.showWidgetFallback();
-                    UI.enableInput();
-                    return;
-                }
                 if (res.status !== 200 || !res.responseText) {
                     UI.setStatus('✗ Không truy cập được trang nhiệm vụ', 'err');
                     UI.enableInput();
@@ -1657,20 +1362,13 @@ button:focus-visible {
                     }
                 }
 
-                // [PATCH v0.6 P3] CHI DIEN MA, KHONG TU NOP: ban deobf tu goi submitFinalLink()
-                // ngay khi widget tra ma ve. Thiet ke remake: lay ma -> dien vao o code -> dung;
-                // nguoi dung tu bam nut "Nop ngay" (goi submitFinalLink) + tu giai captcha.
                 if (foundCode) {
-                    this.fillCodeOnly(foundCode);
+                    await this.submitFinalLink(foundCode);
                 } else {
                     UI.setStatus('⊘ Không lấy được mã từ widget', 'warn');
                 }
             } catch (err) {
-                // [PATCH v0.6.1/0.6.2] Kem URL vao loi (neu loi mang thi URL da co san
-                // tu onerror, khong lap lai) + mo o dan tay URL widget de bro chay vong.
-                const msg = String(err && err.message || err);
-                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(taskUrl) === -1 ? ' — URL: ' + taskUrl : '') + ' — dán URL widget vào ô dưới để chạy thẳng', 'err');
-                UI.showWidgetFallback();
+                UI.setStatus('✗ Có lỗi xảy ra: ' + err.message, 'err');
             } finally {
                 UI.enableInput();
             }
@@ -1695,24 +1393,10 @@ button:focus-visible {
 
             let candidateDomains = DomainMatcher.extractDomainsFromText(task.text);
 
-            // [PATCH v0.6 P2] Mat na Buoc 3: deobf dinh nghia DomainMatcher.matchMask() nhung
-            // KHONG BAO GIO goi no (dead code) — OCR lay domain co diem cao nhat roi chay luon,
-            // OCR doc sai 1 ky tu cung lay domain sai di tiep. O day neu text co mat na (vd
-            // 'kqbd***.site') thi domain ung vien BAT BUOC phai khop mat na, neu khong thi
-            // DUNG lai, khong doan domain tu ban doc OCR chua chac chan.
-            const step3Mask = DomainMatcher.extractMaskFromText(task.text);
-            if (candidateDomains.length === 0 || (step3Mask && !candidateDomains.some(d => DomainMatcher.matchMask(d, step3Mask)))) {
+            if (candidateDomains.length === 0) {
                 const ocrText = await OCREngine.scanAdvertiserImages();
                 if (ocrText) {
-                    candidateDomains = candidateDomains.concat(DomainMatcher.extractDomainsFromText(ocrText));
-                }
-            }
-            if (step3Mask) {
-                candidateDomains = candidateDomains.filter(d => DomainMatcher.matchMask(d, step3Mask));
-                if (candidateDomains.length === 0) {
-                    UI.setStatus('OCR không khớp mặt nạ Bước 3 — dừng, không đoán', 'err');
-                    UI.enableInput();
-                    return;
+                    candidateDomains = DomainMatcher.extractDomainsFromText(ocrText);
                 }
             }
 
@@ -1731,15 +1415,9 @@ button:focus-visible {
         }
     };
 
-    // [PATCH v0.6] Test hook cho jsdom (khong anh huong chay that): mo cac doi tuong chinh
-    // de test mask / fill-only / _traffic_cid_ ma khong can chay het workflow.
-    window.__LINK4M_TEST__ = { getClientId, DomainMatcher, OCREngine, Engine, UI, CONFIG, TLDS };
-
     function bootstrap() {
         if (window.__LINK4M_LOADED__) return;
         window.__LINK4M_LOADED__ = true;
-        // [PATCH v0.6 P1] Sinh/luu _traffic_cid_ ngay khi khoi dong (chi luu cuc bo).
-        getClientId();
         Engine.runAutoWorkflow();
     }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Link4m Bypass — Remake (deobf + patches)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.2
+// @version      0.6.3
 // @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
 // @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
@@ -1381,6 +1381,39 @@ button:focus-visible {
             return { html, text, alias, campaign_id, display_id, prefix, taskId };
         },
 
+        // [PATCH v0.6.3] Trich ma that tu response verify — KHONG lay token dau tien.
+        // Loi goc (bro test live 2026-11-08): regex /["']?([A-Za-z0-9_-]{5,25})["']?/
+        // lay token alnum dau tien trong response, ma response JSON bat dau bang
+        // {"success":true,...} nen no lay luon chu "success" lam ma. Day la cung
+        // dang loi "first-token" cua Dut ma v0.5 tung sua bang JSON co cau truc.
+        // Thu tu: (1) JSON.parse -> doc field code/quest_code (ke ca data.*),
+        // (2) token regex nhung BO QUA tu khoa JSON (success/status/result/...),
+        // (3) sessionData.code cuoi cung (cung loc tu khoa). Khong co gi khop -> ''.
+        // Chi log TEN FIELD (khong log gia tri) de chan doan ma khong lo ma that.
+        extractVerifyCode(text, sessionData) {
+            const KEYWORDS = ['success', 'status', 'result', 'message', 'error', 'failed', 'failure', 'true', 'false', 'null', 'undefined', 'data', 'code', 'quest', 'quest_code', 'verify', 'valid', 'invalid', 'ok', 'okay', 'done', 'complete', 'completed'];
+            const isKeyword = (s) => !s || KEYWORDS.indexOf(String(s).toLowerCase()) !== -1;
+            const pick = (v) => (typeof v === 'string' && v.trim() && !isKeyword(v.trim()) ? v.trim() : '');
+            let parsed = null;
+            try { parsed = JSON.parse(text || ''); } catch (e) {}
+            if (parsed && typeof parsed === 'object') {
+                try { console.log('[Link4M Widget] Verify response keys:', Object.keys(parsed)); } catch (e) {}
+                const fromTop = pick(parsed.code) || pick(parsed.quest_code) || pick(parsed.code_value) || pick(parsed.result_code);
+                if (fromTop) return fromTop;
+                const nested = parsed.data || parsed.result;
+                if (nested && typeof nested === 'object') {
+                    const fromNested = pick(nested.code) || pick(nested.quest_code);
+                    if (fromNested) return fromNested;
+                }
+            }
+            const tokens = (text || '').match(/[A-Za-z0-9_-]{5,25}/g) || [];
+            for (const t of tokens) {
+                if (!isKeyword(t)) return t;
+            }
+            if (sessionData) return pick(sessionData.code) || pick(sessionData.quest_code);
+            return '';
+        },
+
         async executeWidgetWorkflow(widgetObj) {
             UI.setStatus(`Đang kết nối widget: ${widgetObj.domain}…`, 'info', true);
 
@@ -1427,13 +1460,9 @@ button:focus-visible {
             const verifyUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=verify&traffic_session=${encodeURIComponent(sessionData.session || '')}`;
             const verifyRes = await httpReq({ method: 'GET', url: verifyUrl });
 
-            let finalCode = '';
-            if (verifyRes.responseText) {
-                const jsonMatch = verifyRes.responseText.match(/["']?([A-Za-z0-9_-]{5,25})["']?/);
-                if (jsonMatch) finalCode = jsonMatch[1];
-            }
-
-            if (!finalCode && sessionData.code) finalCode = sessionData.code;
+            // [PATCH v0.6.3] Dung extractVerifyCode (JSON co cau truc truoc),
+            // khong lay token dau tien nua — token dau tien co the la "success".
+            const finalCode = this.extractVerifyCode(verifyRes.responseText, sessionData);
             return finalCode;
         },
 

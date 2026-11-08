@@ -1,4 +1,4 @@
-// Mock tests for link4m-remake.user.js v0.6.2 — jsdom only, no network, no real account.
+// Mock tests for link4m-remake.user.js v0.6.3 — jsdom only, no network, no real account.
 // Run: NODE_PATH=~/workspace/deobf-cakj/node_modules node test-link4m-remake.js
 // Fake values only: FAKEKEY / FAKECODE* / fake domains. Nothing real is submitted.
 const { JSDOM } = require('jsdom');
@@ -35,7 +35,7 @@ async function main() {
   w.GM_getValue = (k, d) => (k in store ? store[k] : d);
   w.GM_setValue = (k, v) => { store[k] = v; };
   w.GM_setClipboard = () => {};
-  w.GM_info = { script: { version: '0.6.2' } };
+  w.GM_info = { script: { version: '0.6.3' } };
   const reqLog = [];
   w.GM_xmlhttpRequest = (opts) => {
     reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null, headers: opts.headers || {} });
@@ -46,6 +46,10 @@ async function main() {
         opts.onload({ status: 403, statusText: 'Forbidden', responseText: '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script></body></html>', finalUrl: opts.url });
       } else if (opts.url.includes('netfail.test')) {
         opts.onerror({});
+      } else if (opts.url.includes('action=verify')) {
+        opts.onload({ status: 200, statusText: 'OK', responseText: '{"success":true,"code":"X7K9Q2"}', finalUrl: opts.url });
+      } else if (opts.url.includes('action=init')) {
+        opts.onload({ status: 200, statusText: 'OK', responseText: '{"success":true,"totalStep":1,"traffic_wait_time":1,"session":"FAKESESS"}', finalUrl: opts.url });
       } else if (/^https:\/\/(kqbdaliga\.site|example-task\.com)/.test(opts.url)) {
         opts.onload({ status: 200, statusText: 'OK', responseText: '<html><body><script src="https://widget.test/widget/service.js?key=FAKEKEY"></script></body></html>', finalUrl: opts.url });
       } else {
@@ -63,7 +67,8 @@ async function main() {
   if (!T) { console.log('passed', passed, 'failed', failed); process.exit(1); }
   check('no unhandled rejection from eval-time auto run', !unhandled, String(unhandled));
   check('panel exists (deobf Shadow DOM HUD kept)', !!w.document.getElementById('l4m-bypass-host'));
-  check('UI version 0.6.2', T.UI.version === '0.6.2', T.UI.version);
+  check('UI version 0.6.3', T.UI.version === '0.6.3', T.UI.version);
+  const realExecuteWidgetWorkflow = T.Engine.executeWidgetWorkflow;
 
   // ---- (c) getClientId: bootstrap already called it, stable + persisted ----
   check('bootstrap persisted _traffic_cid_ (P1)', typeof store['_traffic_cid_'] === 'string' && store['_traffic_cid_'].startsWith('cid-'), JSON.stringify(store));
@@ -167,6 +172,20 @@ async function main() {
   check('v0.6.2 runWidgetFromUrl: pendingCode stored, no POST', T.Engine.pendingCode === 'WIDGET77' && !reqLog.slice(reqBeforeW).some(r => r.url.includes('/links/get-link-info')));
   await T.Engine.runWidgetFromUrl('https://789-club.cc/');
   check('v0.6.2 runWidgetFromUrl: invalid URL errors clearly', /không đúng dạng/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+
+  // ---- v0.6.3: verify code extraction — never the first token ("success" bug) ----
+  check('v0.6.3 extract: {"success":true,"code":"X7K9Q2"} -> code', T.Engine.extractVerifyCode('{"success":true,"code":"X7K9Q2"}', {}) === 'X7K9Q2');
+  check('v0.6.3 extract: {"status":"success","code":"AB12CD"} -> code, not status', T.Engine.extractVerifyCode('{"status":"success","code":"AB12CD"}', {}) === 'AB12CD');
+  check('v0.6.3 extract: {"success":true,"quest_code":"K3J8H2"} -> quest_code', T.Engine.extractVerifyCode('{"success":true,"quest_code":"K3J8H2"}', {}) === 'K3J8H2');
+  check('v0.6.3 extract: nested data.code', T.Engine.extractVerifyCode('{"success":true,"data":{"code":"Z1X2C3"}}', {}) === 'Z1X2C3');
+  check('v0.6.3 extract: plain "success" + session code -> session code', T.Engine.extractVerifyCode('success', { code: 'Q9W8E7' }) === 'Q9W8E7');
+  check('v0.6.3 extract: no code anywhere -> empty, no guessing', T.Engine.extractVerifyCode('{"status":"success"}', {}) === '');
+  check('v0.6.3 extract: token fallback skips keywords', T.Engine.extractVerifyCode('{"status":"success","note":"hello-world"}', {}) === 'hello-world');
+  T.Engine.executeWidgetWorkflow = realExecuteWidgetWorkflow;
+  const reqBeforeV = reqLog.length;
+  await T.Engine.runWidgetFromUrl('https://widget.test/widget/service.js?key=FAKEKEY');
+  check('v0.6.3 e2e: real widget flow fills structured code, not "success"', w.document.querySelector('input[name="code"]').value === 'X7K9Q2', w.document.querySelector('input[name="code"]').value);
+  check('v0.6.3 e2e: still fill-only, no POST', !reqLog.slice(reqBeforeV).some(r => r.url.includes('/links/get-link-info')));
 
   console.log('---');
   console.log('passed', passed, 'failed', failed);

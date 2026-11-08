@@ -100,3 +100,12 @@ v0.6.1 đổi header vẫn lỗi y cũ trên 789-club.cc (bro test live 2026-11-
 - Lưu ý: nếu host widget cũng đứng sau Cloudflare thì bước chạy widget sẽ lỗi mạng tiếp — lúc đó panel sẽ báo rõ domain widget bị lỗi, mình tính tiếp.
 
 **Test:** `node --check` + jsdom 54/54 PASS (42 cũ + 12 mới: parse URL widget / hiện ô fallback / chạy widget không cần GET trang / URL sai báo rõ). Live cần bro test với URL widget thật từ view-source 789-club.cc.
+
+### v0.6.3 — fix mã lấy về chỉ là chữ "success"
+
+Bro test live 2026-11-08: luồng chạy hết (đếm chờ xong bước 1), nhưng mã điền vào ô chỉ là `success`. Nguyên nhân: regex cũ trong bước verify lấy **token alnum đầu tiên** trong response — response JSON bắt đầu bằng `{"success":true,...}` nên nó lấy luôn chữ `success` làm mã. Cùng dạng lỗi "first-token" của Dut mà v0.5 từng sửa.
+
+- `extractVerifyCode` mới: JSON.parse rồi đọc field `code`/`quest_code` (kể cả `data.*`) trước; không có thì quét token nhưng **bỏ qua từ khóa JSON** (`success`, `status`, `result`...); cuối cùng mới lấy `sessionData.code`. Không có gì khớp thì trả rỗng, không đoán.
+- Chỉ log **tên field** của response verify ra console (F12) để chẩn đoán, không log giá trị mã thật.
+
+**Test:** `node --check` + jsdom 63/63 PASS (54 cũ + 9 mới: unit parser 7 ca + e2e luồng widget thật trả mã đúng). Bro test lại trên nhiệm vụ đang làm (NG1kcqm1): mã điền vào ô phải là mã thật, không còn là `success` nữa.

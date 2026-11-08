@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Link4m Bypass — Remake (deobf + patches)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.0
+// @version      0.6.1
 // @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
 // @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
@@ -146,11 +146,21 @@
                 reqFn({
                     method: (options.method || 'GET').toUpperCase(),
                     url: options.url,
+                    // [PATCH v0.6.1] Header giong trinh duyet that, khong giong bot.
+                    // Bang chung live 2026-11-08 tren 789-club.cc (Cloudflare):
+                    // curl voi header kieu GM_xhr cu (Accept: */*, khong Referer)
+                    // bi cat ket noi tan goc (HTTP 000 = onerror trong GM_xhr),
+                    // trong khi tab Chrome that mo ngon (navigation + cookie
+                    // cf_clearance sau khi qua thu thach). Header cu la tin hieu
+                    // bot ro nhat nen doi: Accept dang text/html nhu tab that,
+                    // them Referer tu trang link4m, bo Cache-Control/Pragma
+                    // no-cache (cung la dau hieu bot). GM_xmlhttpRequest van gui
+                    // cookie cua domain (ke ca cf_clearance) nen mo tab trang
+                    // dich qua kiem tra 1 lan roi bam lai co the qua duoc.
                     headers: Object.assign({
-                        'Accept': '*/*',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                         'Accept-Language': 'vi,en;q=0.9,en-US;q=0.8',
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
+                        'Referer': (typeof location !== 'undefined' ? location.href : '')
                     }, options.headers || {}),
                     data: options.data || null,
                     responseType: options.responseType || '',
@@ -164,7 +174,9 @@
                             finalUrl: res.finalUrl || options.url
                         });
                     },
-                    onerror: function (err) { reject(new Error(err.statusText || 'Loi mang khi gui request')); },
+                    // [PATCH v0.6.1] Loi mang kem luon URL de lan sau nhin la biet
+                    // request nao chet, khong phai doan.
+                    onerror: function (err) { reject(new Error((err.statusText || 'Loi mang khi gui request') + ' — URL: ' + options.url)); },
                     ontimeout: function () { reject(new Error('Het thoi gian cho ket noi (Timeout)')); },
                     onabort: function () { reject(new Error('Yeu cau bi huy (Abort)')); }
                 });
@@ -1431,6 +1443,16 @@ button:focus-visible {
 
             try {
                 const res = await httpReq({ method: 'GET', url: taskUrl });
+                // [PATCH v0.6.1] Trang dich dung Cloudflare chan bot: tra 403
+                // + trang thu thach "Just a moment..." (chua challenges.cloudflare.com).
+                // GM_xhr khong giai duoc thu thach JS, nhung mo tab trang dich qua
+                // kiem tra 1 lan se co cookie cf_clearance, bam lai co the qua.
+                // Bao ro nguyen nhan thay vi bao chung chung "khong truy cap duoc".
+                if (res.status === 403 && /challenges\.cloudflare\.com|Just a moment/i.test(res.responseText || '')) {
+                    UI.setStatus('⛔ Trang đích chặn bot (Cloudflare) — mở tab trang đích qua kiểm tra 1 lần rồi bấm Bắt đầu lại', 'err');
+                    UI.enableInput();
+                    return;
+                }
                 if (res.status !== 200 || !res.responseText) {
                     UI.setStatus('✗ Không truy cập được trang nhiệm vụ', 'err');
                     UI.enableInput();
@@ -1464,7 +1486,10 @@ button:focus-visible {
                     UI.setStatus('⊘ Không lấy được mã từ widget', 'warn');
                 }
             } catch (err) {
-                UI.setStatus('✗ Có lỗi xảy ra: ' + err.message, 'err');
+                // [PATCH v0.6.1] Kem URL vao loi (neu loi mang thi URL da co san
+                // tu onerror, khong lap lai) de lan sau nhin la biet chet o dau.
+                const msg = String(err && err.message || err);
+                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(taskUrl) === -1 ? ' — URL: ' + taskUrl : ''), 'err');
             } finally {
                 UI.enableInput();
             }

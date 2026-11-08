@@ -1,4 +1,4 @@
-// Mock tests for link4m-remake.user.js v0.6 — jsdom only, no network, no real account.
+// Mock tests for link4m-remake.user.js v0.6.1 — jsdom only, no network, no real account.
 // Run: NODE_PATH=~/workspace/deobf-cakj/node_modules node test-link4m-remake.js
 // Fake values only: FAKEKEY / FAKECODE* / fake domains. Nothing real is submitted.
 const { JSDOM } = require('jsdom');
@@ -35,13 +35,17 @@ async function main() {
   w.GM_getValue = (k, d) => (k in store ? store[k] : d);
   w.GM_setValue = (k, v) => { store[k] = v; };
   w.GM_setClipboard = () => {};
-  w.GM_info = { script: { version: '0.6.0' } };
+  w.GM_info = { script: { version: '0.6.1' } };
   const reqLog = [];
   w.GM_xmlhttpRequest = (opts) => {
-    reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null });
+    reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null, headers: opts.headers || {} });
     setTimeout(() => {
       if (opts.url.includes('/links/get-link-info')) {
         opts.onload({ status: 200, statusText: 'OK', responseText: JSON.stringify({ url: 'https://dest.test/fake' }), finalUrl: opts.url });
+      } else if (opts.url.includes('cfblocked.test')) {
+        opts.onload({ status: 403, statusText: 'Forbidden', responseText: '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script></body></html>', finalUrl: opts.url });
+      } else if (opts.url.includes('netfail.test')) {
+        opts.onerror({});
       } else if (/^https:\/\/(kqbdaliga\.site|example-task\.com)/.test(opts.url)) {
         opts.onload({ status: 200, statusText: 'OK', responseText: '<html><body><script src="https://widget.test/widget/service.js?key=FAKEKEY"></script></body></html>', finalUrl: opts.url });
       } else {
@@ -59,7 +63,7 @@ async function main() {
   if (!T) { console.log('passed', passed, 'failed', failed); process.exit(1); }
   check('no unhandled rejection from eval-time auto run', !unhandled, String(unhandled));
   check('panel exists (deobf Shadow DOM HUD kept)', !!w.document.getElementById('l4m-bypass-host'));
-  check('UI version 0.6.0', T.UI.version === '0.6.0', T.UI.version);
+  check('UI version 0.6.1', T.UI.version === '0.6.1', T.UI.version);
 
   // ---- (c) getClientId: bootstrap already called it, stable + persisted ----
   check('bootstrap persisted _traffic_cid_ (P1)', typeof store['_traffic_cid_'] === 'string' && store['_traffic_cid_'].startsWith('cid-'), JSON.stringify(store));
@@ -128,6 +132,20 @@ async function main() {
   await T.Engine.runAutoWorkflow();
   check('no-mask passthrough: fetched text domain without OCR (P2)', reqLog.slice(reqBeforePass).some(r => r.url === 'https://example-task.com'), JSON.stringify(reqLog.slice(reqBeforePass)));
   check('no-mask passthrough: still fill-only, no POST (P3)', !reqLog.slice(reqBeforePass).some(r => r.url.includes('/links/get-link-info')));
+
+  // ---- v0.6.1: browser-like headers + Cloudflare 403 + error carries URL ----
+  const lastTaskFetch = [...reqLog].reverse().find(r => r.url === 'https://example-task.com');
+  check('v0.6.1 headers: Accept is browser-like text/html (not */*)', lastTaskFetch && typeof lastTaskFetch.headers.Accept === 'string' && lastTaskFetch.headers.Accept.startsWith('text/html'), JSON.stringify(lastTaskFetch && lastTaskFetch.headers));
+  check('v0.6.1 headers: Referer is the link4m page', lastTaskFetch && lastTaskFetch.headers.Referer === 'https://link4m.com/go/test', JSON.stringify(lastTaskFetch && lastTaskFetch.headers));
+  check('v0.6.1 headers: no bot-signal Pragma / no-cache', lastTaskFetch && !('Pragma' in lastTaskFetch.headers) && lastTaskFetch.headers['Cache-Control'] !== 'no-cache', JSON.stringify(lastTaskFetch && lastTaskFetch.headers));
+
+  const reqBeforeCf = reqLog.length;
+  await T.Engine.runManualUrlBypass('https://cfblocked.test/');
+  check('v0.6.1 Cloudflare 403: status names Cloudflare + retry instruction', /chặn bot \(Cloudflare\)/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+  check('v0.6.1 Cloudflare 403: no widget fetch after challenge page', reqLog.length === reqBeforeCf + 1, 'reqs=' + (reqLog.length - reqBeforeCf));
+
+  await T.Engine.runManualUrlBypass('https://netfail.test/');
+  check('v0.6.1 network error: status names the failing URL', /netfail\.test/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
 
   console.log('---');
   console.log('passed', passed, 'failed', failed);

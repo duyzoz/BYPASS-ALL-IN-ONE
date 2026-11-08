@@ -81,3 +81,13 @@ Remake từ bản deobf Link4m (n1ulls) — giữ 100% UI cyberpunk + luồng g�
 **Cài đặt:** mở link raw trên, Tampermonkey sẽ hỏi cài đặt; cập nhật tự động qua `@updateURL` khi có bản mới.
 
 **Test:** `node --check` + jsdom 36/36 PASS (mask / fill-only / `_traffic_cid_` / cấu trúc). Chưa test live — test thật trên link4m.org/go/VDcp1 bằng Chrome của bro.
+
+### v0.6.1 — fix lỗi mạng trên trang đích có Cloudflare (vd 789-club.cc)
+
+Nguyên nhân gốc (chứng minh live 2026-11-08): trang đích đứng sau Cloudflare — request kiểu bot (`Accept: */*`, không Referer) bị cắt kết nối tận gốc (HTTP 000 = `onerror` trong GM_xhr), trong khi tab Chrome thật mở ngon (navigation + cookie `cf_clearance`). Domain đúng, widget còn sống, Tampermonkey không chặn gì cả.
+
+- httpReq đổi sang header giống trình duyệt thật (`Accept: text/html...`, thêm `Referer` từ trang link4m, bỏ `Cache-Control`/`Pragma: no-cache`).
+- Gặp 403 + trang thử thách Cloudflare thì báo rõ: "Trang đích chặn bot (Cloudflare) — mở tab trang đích qua kiểm tra 1 lần rồi bấm Bắt đầu lại" (GM_xhr gửi kèm cookie `cf_clearance` nên mở tab qua kiểm tra trước rồi bấm lại có thể qua).
+- Lỗi mạng giờ kèm luôn URL bị lỗi để nhìn là biết chết ở đâu.
+
+**Test:** `node --check` + jsdom 42/42 PASS (36 cũ + 6 mới: header / 403 Cloudflare / lỗi kèm URL). Live vẫn cần bro test lại trên VDcp1.

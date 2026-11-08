@@ -120,3 +120,13 @@ Bro test live 2026-11-08: mã lấy về là mã thật (`u00f4ng`, 7 ký tự, 
 **Thử ngay với v0.6.3 (không cần đợi update):** giải captcha trên trang trước, rồi bấm **Nộp ngay** trong panel — nó gửi đúng mã `u00f4ng` đầy đủ. Nếu vẫn báo sai mã thì mã lấy về có vấn đề thật, báo lại cho tao.
 
 **Test:** `node --check` + jsdom 70/70 PASS (63 cũ + 7 mới: phát hiện cắt ký tự / native setter / cảnh báo + giữ mã đầy đủ).
+
+### v0.6.5 — mã nào cũng là `u00f4ng` (bịa mã)
+
+Bro test live 2026-11-08: đổi nhiệm vụ mới (niềng răng / nhakhoadangluu) mà mã vẫn `u00f4ng` y cũ — mã này không phải mã thật. Nghi phạm chính: verify response echo lại **widget key** (id của widget, giống nhau mọi nhiệm vụ), vd `{"success":true,"key":"u00f4ng",...}` mà không có field code — parser cũ quét token thì vớ luôn giá trị key làm mã (tên field `key` chỉ có 3 ký tự nên regex bỏ qua, lấy luôn giá trị).
+
+- `extractVerifyCode` thêm tham số loại trừ: widget **key + session không bao giờ được tính là mã**; đọc thêm field `token`/`captcha_code`/`code_text`/`questcode`/`passcode` và `result`/`data` dạng chuỗi; chỉ có key mà không có mã thật thì trả rỗng, không bịa.
+- Chống cache: mọi GET widget thêm `&_t=timestamp` (v0.6.1 bỏ header no-cache nên trình duyệt có thể trả response widget cũ).
+- Status khi điền mã xong hiện tên widget domain để chụp ảnh là thấy mã lấy từ widget nào.
+
+**Test:** `node --check` + jsdom 80/80 PASS (70 cũ + 10 mới: loại trừ key/session / token + result chuỗi / cache-bust / e2e). Bro update rồi chạy lại nhiệm vụ mới: mã phải khác nhau mỗi nhiệm vụ. Nếu vẫn `u00f4ng`, mở F12 coi dòng `Verify response keys` và báo lại tên field cho tao (chỉ tên field, không gửi mã).

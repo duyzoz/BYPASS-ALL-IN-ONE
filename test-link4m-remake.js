@@ -1,4 +1,4 @@
-// Mock tests for link4m-remake.user.js v0.6.4 — jsdom only, no network, no real account.
+// Mock tests for link4m-remake.user.js v0.6.5 — jsdom only, no network, no real account.
 // Run: NODE_PATH=~/workspace/deobf-cakj/node_modules node test-link4m-remake.js
 // Fake values only: FAKEKEY / FAKECODE* / fake domains. Nothing real is submitted.
 const { JSDOM } = require('jsdom');
@@ -35,7 +35,7 @@ async function main() {
   w.GM_getValue = (k, d) => (k in store ? store[k] : d);
   w.GM_setValue = (k, v) => { store[k] = v; };
   w.GM_setClipboard = () => {};
-  w.GM_info = { script: { version: '0.6.4' } };
+  w.GM_info = { script: { version: '0.6.5' } };
   const reqLog = [];
   w.GM_xmlhttpRequest = (opts) => {
     reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null, headers: opts.headers || {} });
@@ -47,7 +47,7 @@ async function main() {
       } else if (opts.url.includes('netfail.test')) {
         opts.onerror({});
       } else if (opts.url.includes('action=verify')) {
-        opts.onload({ status: 200, statusText: 'OK', responseText: '{"success":true,"code":"X7K9Q2"}', finalUrl: opts.url });
+        opts.onload({ status: 200, statusText: 'OK', responseText: '{"success":true,"key":"FAKEKEY","code":"X7K9Q2"}', finalUrl: opts.url });
       } else if (opts.url.includes('action=init')) {
         opts.onload({ status: 200, statusText: 'OK', responseText: '{"success":true,"totalStep":1,"traffic_wait_time":1,"session":"FAKESESS"}', finalUrl: opts.url });
       } else if (/^https:\/\/(kqbdaliga\.site|example-task\.com)/.test(opts.url)) {
@@ -67,7 +67,7 @@ async function main() {
   if (!T) { console.log('passed', passed, 'failed', failed); process.exit(1); }
   check('no unhandled rejection from eval-time auto run', !unhandled, String(unhandled));
   check('panel exists (deobf Shadow DOM HUD kept)', !!w.document.getElementById('l4m-bypass-host'));
-  check('UI version 0.6.4', T.UI.version === '0.6.4', T.UI.version);
+  check('UI version 0.6.5', T.UI.version === '0.6.5', T.UI.version);
   const realExecuteWidgetWorkflow = T.Engine.executeWidgetWorkflow;
 
   // ---- (c) getClientId: bootstrap already called it, stable + persisted ----
@@ -206,6 +206,21 @@ async function main() {
   check('v0.6.4 fillCodeOnly: truncated fill warns with counts + points at "Nộp ngay"', /chỉ nhận 6\/7 ký tự/.test(T.UI.statusText.textContent) && /Nộp ngay/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
   check('v0.6.4 fillCodeOnly: truncated fill still keeps full pendingCode', T.Engine.pendingCode === 'u00f4ng');
   T.Engine.verifyPageFill = origVerify;
+
+  // ---- v0.6.5: same code every task ("u00f4ng") — widget KEY mistaken for code ----
+  check('v0.6.5 extract: key echoed in verify is excluded, real result wins', T.Engine.extractVerifyCode('{"success":true,"key":"u00f4ng","result":"K9X2M4"}', {}, ['u00f4ng']) === 'K9X2M4');
+  check('v0.6.5 extract: only key present -> empty, no fabrication', T.Engine.extractVerifyCode('{"success":true,"key":"u00f4ng"}', {}, ['u00f4ng']) === '');
+  check('v0.6.5 extract: token field', T.Engine.extractVerifyCode('{"success":true,"token":"A1B2C3"}', {}) === 'A1B2C3');
+  check('v0.6.5 extract: string result is the code', T.Engine.extractVerifyCode('{"success":true,"result":"Z9Y8X7"}', {}) === 'Z9Y8X7');
+  check('v0.6.5 extract: string data is the code', T.Engine.extractVerifyCode('{"success":true,"data":"Q1W2E3"}', {}) === 'Q1W2E3');
+  check('v0.6.5 extract: sessionData.code equal to key is excluded', T.Engine.extractVerifyCode('success', { code: 'u00f4ng' }, ['u00f4ng']) === '');
+  check('v0.6.5 extract: session id excluded from tokens', T.Engine.extractVerifyCode('{"success":true,"session":"SESS99"}', {}, ['SESS99']) === '');
+  const reqBeforeBust = reqLog.length;
+  await T.Engine.runWidgetFromUrl('https://widget.test/widget/service.js?key=FAKEKEY');
+  const bustReqs = reqLog.slice(reqBeforeBust);
+  check('v0.6.5 cache-bust: all widget GETs carry _t=', bustReqs.length === 3 && bustReqs.every(r => r.url.includes('_t=')), bustReqs.map(r => r.url).join(' | '));
+  check('v0.6.5 e2e: key in verify ignored, structured code fills', w.document.querySelector('input[name="code"]').value === 'X7K9Q2', w.document.querySelector('input[name="code"]').value);
+  check('v0.6.5 e2e: status names the widget domain', /widget: widget\.test/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
 
   console.log('---');
   console.log('passed', passed, 'failed', failed);

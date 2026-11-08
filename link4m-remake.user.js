@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Link4m Bypass — Remake (deobf + patches)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.4
+// @version      0.6.5
 // @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
 // @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
@@ -1317,6 +1317,8 @@ button:focus-visible {
     const Engine = {
         // [PATCH v0.6 P3] Ma widget lay duoc giu o day cho nut "Nop ngay" bam tay.
         pendingCode: null,
+        // [PATCH v0.6.5] Domain widget vua chay (de hien len status khi dien ma).
+        lastWidgetDomain: null,
 
         findWidgetScriptUrls(html) {
             const matches = [];
@@ -1381,7 +1383,7 @@ button:focus-visible {
             return { html, text, alias, campaign_id, display_id, prefix, taskId };
         },
 
-        // [PATCH v0.6.3] Trich ma that tu response verify — KHONG lay token dau tien.
+        // [PATCH v0.6.5] Trich ma that tu response verify — KHONG lay token dau tien.
         // Loi goc (bro test live 2026-11-08): regex /["']?([A-Za-z0-9_-]{5,25})["']?/
         // lay token alnum dau tien trong response, ma response JSON bat dau bang
         // {"success":true,...} nen no lay luon chu "success" lam ma. Day la cung
@@ -1390,19 +1392,32 @@ button:focus-visible {
         // (2) token regex nhung BO QUA tu khoa JSON (success/status/result/...),
         // (3) sessionData.code cuoi cung (cung loc tu khoa). Khong co gi khop -> ''.
         // Chi log TEN FIELD (khong log gia tri) de chan doan ma khong lo ma that.
-        extractVerifyCode(text, sessionData) {
-            const KEYWORDS = ['success', 'status', 'result', 'message', 'error', 'failed', 'failure', 'true', 'false', 'null', 'undefined', 'data', 'code', 'quest', 'quest_code', 'verify', 'valid', 'invalid', 'ok', 'okay', 'done', 'complete', 'completed'];
-            const isKeyword = (s) => !s || KEYWORDS.indexOf(String(s).toLowerCase()) !== -1;
+        // [PATCH v0.6.5] Nghi pham chinh cho "ma nao cung la u00f4ng": verify response
+        // echo lai WIDGET KEY (id cua widget, giong nhau moi nhiem vu) — vd
+        // {"success":true,"key":"u00f4ng",...} khong co field code — parser cu quet
+        // token thi vot trung key vi "key" chi co 3 ky tu (<5) nen regex bo qua ten
+        // field ma lay luon GIA TRI key lam ma. Fix: (a) loai tru key + session khoi
+        // moi ung vien (tham so exclude), (b) doc them field token/captcha_code/
+        // code_text/questcode/passcode + result/data DANG CHUOI (ma thang, khong
+        // phai object), (c) neu chi co key ma khong co ma that thi tra '' chu
+        // khong doan bua.
+        extractVerifyCode(text, sessionData, exclude) {
+            const KEYWORDS = ['success', 'status', 'result', 'message', 'error', 'failed', 'failure', 'true', 'false', 'null', 'undefined', 'data', 'code', 'quest', 'quest_code', 'verify', 'valid', 'invalid', 'ok', 'okay', 'done', 'complete', 'completed', 'session', 'traffic_session', 'totalstep', 'traffic_wait_time', 'traffic_step_2_wait_time', 'action', 'get_code', 'key'];
+            const excluded = new Set((exclude || []).filter(Boolean).map(String));
+            const isKeyword = (s) => !s || KEYWORDS.indexOf(String(s).toLowerCase()) !== -1 || excluded.has(String(s));
             const pick = (v) => (typeof v === 'string' && v.trim() && !isKeyword(v.trim()) ? v.trim() : '');
             let parsed = null;
             try { parsed = JSON.parse(text || ''); } catch (e) {}
             if (parsed && typeof parsed === 'object') {
                 try { console.log('[Link4M Widget] Verify response keys:', Object.keys(parsed)); } catch (e) {}
-                const fromTop = pick(parsed.code) || pick(parsed.quest_code) || pick(parsed.code_value) || pick(parsed.result_code);
+                const fromTop = pick(parsed.code) || pick(parsed.quest_code) || pick(parsed.code_value) || pick(parsed.result_code) || pick(parsed.token) || pick(parsed.captcha_code) || pick(parsed.code_text) || pick(parsed.questcode) || pick(parsed.passcode);
                 if (fromTop) return fromTop;
+                // result/data co the la CHUOI ma thang (khong phai object).
+                if (typeof parsed.result === 'string') { const r = pick(parsed.result); if (r) return r; }
+                if (typeof parsed.data === 'string') { const d = pick(parsed.data); if (d) return d; }
                 const nested = parsed.data || parsed.result;
                 if (nested && typeof nested === 'object') {
-                    const fromNested = pick(nested.code) || pick(nested.quest_code);
+                    const fromNested = pick(nested.code) || pick(nested.quest_code) || pick(nested.token) || pick(nested.captcha_code);
                     if (fromNested) return fromNested;
                 }
             }
@@ -1416,14 +1431,21 @@ button:focus-visible {
 
         async executeWidgetWorkflow(widgetObj) {
             UI.setStatus(`Đang kết nối widget: ${widgetObj.domain}…`, 'info', true);
+            // [PATCH v0.6.5] Ghi lai domain widget vua chay de hien len status khi
+            // dien ma xong (chup anh la thay ngay ma lay tu widget nao).
+            this.lastWidgetDomain = widgetObj.domain;
 
-            const scriptRes = await httpReq({ method: 'GET', url: widgetObj.fullUrl });
+            // [PATCH v0.6.5] Chong cache: them &_t=timestamp vao moi GET widget.
+            // v0.6.1 da bo header no-cache de giong trinh duyet, nen trinh duyet
+            // co the tra response widget CU (cung URL = cung session + cung ma).
+            const bust = () => '&_t=' + Date.now();
+            const scriptRes = await httpReq({ method: 'GET', url: widgetObj.fullUrl + bust() });
             const sCode = scriptRes.responseText || '';
 
             const keyMatch = widgetObj.query.match(/(?:^|&)key=([^&"'\s]+)/);
             const key = keyMatch ? keyMatch[1] : '';
 
-            const sessionInitUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=init`;
+            const sessionInitUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=init${bust()}`;
             let sessionRes;
             try {
                 sessionRes = await httpReq({ method: 'GET', url: sessionInitUrl });
@@ -1447,7 +1469,7 @@ button:focus-visible {
 
             if (totalStep >= 2) {
                 UI.setStatus('Qua bước 2…', 'info', true);
-                const step2Url = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&step=2&traffic_session=${encodeURIComponent(sessionData.session || '')}`;
+                const step2Url = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&step=2&traffic_session=${encodeURIComponent(sessionData.session || '')}${bust()}`;
                 await httpReq({ method: 'GET', url: step2Url }).catch(() => {});
 
                 for (let rem = waitTimeStep2; rem >= 0; rem--) {
@@ -1457,12 +1479,12 @@ button:focus-visible {
             }
 
             UI.setStatus('Đang lấy mã xác thực…', 'info', true);
-            const verifyUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=verify&traffic_session=${encodeURIComponent(sessionData.session || '')}`;
+            const verifyUrl = `https://${widgetObj.domain}/widget/get_code.html?key=${key}&action=verify&traffic_session=${encodeURIComponent(sessionData.session || '')}${bust()}`;
             const verifyRes = await httpReq({ method: 'GET', url: verifyUrl });
 
-            // [PATCH v0.6.3] Dung extractVerifyCode (JSON co cau truc truoc),
-            // khong lay token dau tien nua — token dau tien co the la "success".
-            const finalCode = this.extractVerifyCode(verifyRes.responseText, sessionData);
+            // [PATCH v0.6.5] Loai tru widget KEY + session khoi ung vien ma — key la id
+            // cua widget (giong nhau moi nhiem vu), khong phai ma. Xem extractVerifyCode.
+            const finalCode = this.extractVerifyCode(verifyRes.responseText, sessionData, [key, sessionData.session]);
             return finalCode;
         },
 
@@ -1509,10 +1531,13 @@ button:focus-visible {
             }
             if (UI.urlInput) UI.urlInput.value = code;
             UI.enableSubmitNow();
+            // [PATCH v0.6.5] Kem ten widget domain vao status thanh cong de chup anh
+            // la thay ngay ma lay tu widget nao (chan doan "ma nao cung giong nhau").
+            const srcTag = this.lastWidgetDomain ? ` · widget: ${this.lastWidgetDomain}` : '';
             if (fillCheck && !fillCheck.ok) {
                 UI.setStatus(`⚠️ Ô mã trên trang chỉ nhận ${fillCheck.filledLen}/${code.length} ký tự — giải captcha rồi bấm Nộp ngay trong panel để gửi mã đầy đủ`, 'warn', false);
             } else {
-                UI.setStatus('Đã có mã — đã điền, bro tự bấm Nộp + giải captcha để ra link đích', 'ok', false);
+                UI.setStatus(`Đã có mã — đã điền, bro tự bấm Nộp + giải captcha để ra link đích${srcTag}`, 'ok', false);
             }
         },
 

@@ -109,3 +109,14 @@ Bro test live 2026-11-08: luồng chạy hết (đếm chờ xong bước 1), nh
 - Chỉ log **tên field** của response verify ra console (F12) để chẩn đoán, không log giá trị mã thật.
 
 **Test:** `node --check` + jsdom 63/63 PASS (54 cũ + 9 mới: unit parser 7 ca + e2e luồng widget thật trả mã đúng). Bro test lại trên nhiệm vụ đang làm (NG1kcqm1): mã điền vào ô phải là mã thật, không còn là `success` nữa.
+
+### v0.6.4 — ô mã trên trang nuốt mất 1 ký tự
+
+Bro test live 2026-11-08: mã lấy về là mã thật (`u00f4ng`, 7 ký tự, widget báo success), panel cũng hiện đủ 7 ký tự — nhưng ô mã trên trang chỉ còn `u00f4n` (6 ký tự) nên trang báo "Mã không hợp lệ hoặc đã hết hạn". Lần bấm nút xanh đó chỉ gửi mã thiếu, mã thật 7 ký tự chưa bị dùng.
+
+- Điền mã bằng **native setter** (input kiểu React/Vue chỉ cập nhật state khi giá trị đi qua setter gốc, gán `.value` thường bị bỏ qua).
+- Đọc lại ngay sau khi điền: nếu ô trên trang nhận thiếu ký tự thì panel báo rõ `Ô mã trên trang chỉ nhận 6/7 ký tự` và chỉ bro bấm **Nộp ngay** trong panel (nó POST mã đầy đủ + token captcha, không đọc ô trên trang).
+
+**Thử ngay với v0.6.3 (không cần đợi update):** giải captcha trên trang trước, rồi bấm **Nộp ngay** trong panel — nó gửi đúng mã `u00f4ng` đầy đủ. Nếu vẫn báo sai mã thì mã lấy về có vấn đề thật, báo lại cho tao.
+
+**Test:** `node --check` + jsdom 70/70 PASS (63 cũ + 7 mới: phát hiện cắt ký tự / native setter / cảnh báo + giữ mã đầy đủ).

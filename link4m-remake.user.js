@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Link4m Bypass — Remake (deobf + patches)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.3
+// @version      0.6.4
 // @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
 // @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
@@ -1468,18 +1468,52 @@ button:focus-visible {
 
         // [PATCH v0.6 P3] Chi dien ma vao o code cua trang + o nhap cua panel, KHONG POST,
         // KHONG goi submitFinalLink. Nguoi dung tu bam "Nop ngay" de nop + tu giai captcha.
+        // [PATCH v0.6.4] Kiem tra lai gia tri that su nam trong o code cua trang.
+        // Loi goc (bro test live 2026-11-08): panel hien "u00f4ng" (7 ky tu) nhung o
+        // code tren trang chi co "u00f4n" (6 ky tu) — trang bao "Ma khong hop le".
+        // Trinh duyet that cat .value theo maxlength, va input kieu React chi nhan
+        // gia tri qua native setter — nen dien bang setter goc + doc lai ngay sau
+        // khi dien. Neu thieu ky tu thi bao ro, pendingCode van giu ma day du de
+        // nut "Nop ngay" gui dung ma (no POST truc tiep, khong doc o tren trang).
+        verifyPageFill(pageInput, code) {
+            if (!pageInput) return { ok: false, filledLen: 0, maxLen: -1 };
+            const filled = pageInput.value || '';
+            const maxAttr = pageInput.getAttribute('maxlength');
+            const maxLen = maxAttr ? parseInt(maxAttr, 10) : -1;
+            return { ok: filled === code, filledLen: filled.length, maxLen: isNaN(maxLen) ? -1 : maxLen };
+        },
+
         fillCodeOnly(code) {
             if (!code) return;
             this.pendingCode = code;
             const pageCodeInput = document.querySelector('input[name="code"], input#code, input[placeholder*="mã"], input[placeholder*="code"]');
+            let fillCheck = null;
             if (pageCodeInput) {
-                pageCodeInput.value = code;
+                // Native setter: input kieu React/Vue chi cap nhat state khi gia tri
+                // di qua setter goc cua HTMLInputElement (gan .value thuong bi bo qua).
+                try {
+                    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    if (setter) setter.call(pageCodeInput, code);
+                    else pageCodeInput.value = code;
+                } catch (e) {
+                    pageCodeInput.value = code;
+                }
                 pageCodeInput.dispatchEvent(new Event('input', { bubbles: true }));
                 pageCodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                fillCheck = this.verifyPageFill(pageCodeInput, code);
+                if (!fillCheck.ok) {
+                    try {
+                        console.log('[Link4M] O ma trang chi nhan ' + fillCheck.filledLen + '/' + code.length + ' ky tu' + (fillCheck.maxLen > 0 ? ' (maxlength=' + fillCheck.maxLen + ')' : '') + ' — gui bang nut "Nop ngay" de dung ma day du.');
+                    } catch (e) {}
+                }
             }
             if (UI.urlInput) UI.urlInput.value = code;
             UI.enableSubmitNow();
-            UI.setStatus('Đã có mã — đã điền, bro tự bấm Nộp + giải captcha để ra link đích', 'ok', false);
+            if (fillCheck && !fillCheck.ok) {
+                UI.setStatus(`⚠️ Ô mã trên trang chỉ nhận ${fillCheck.filledLen}/${code.length} ký tự — giải captcha rồi bấm Nộp ngay trong panel để gửi mã đầy đủ`, 'warn', false);
+            } else {
+                UI.setStatus('Đã có mã — đã điền, bro tự bấm Nộp + giải captcha để ra link đích', 'ok', false);
+            }
         },
 
         async submitFinalLink(code) {

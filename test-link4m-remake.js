@@ -1,4 +1,4 @@
-// Mock tests for link4m-remake.user.js v0.6.3 — jsdom only, no network, no real account.
+// Mock tests for link4m-remake.user.js v0.6.4 — jsdom only, no network, no real account.
 // Run: NODE_PATH=~/workspace/deobf-cakj/node_modules node test-link4m-remake.js
 // Fake values only: FAKEKEY / FAKECODE* / fake domains. Nothing real is submitted.
 const { JSDOM } = require('jsdom');
@@ -35,7 +35,7 @@ async function main() {
   w.GM_getValue = (k, d) => (k in store ? store[k] : d);
   w.GM_setValue = (k, v) => { store[k] = v; };
   w.GM_setClipboard = () => {};
-  w.GM_info = { script: { version: '0.6.3' } };
+  w.GM_info = { script: { version: '0.6.4' } };
   const reqLog = [];
   w.GM_xmlhttpRequest = (opts) => {
     reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null, headers: opts.headers || {} });
@@ -67,7 +67,7 @@ async function main() {
   if (!T) { console.log('passed', passed, 'failed', failed); process.exit(1); }
   check('no unhandled rejection from eval-time auto run', !unhandled, String(unhandled));
   check('panel exists (deobf Shadow DOM HUD kept)', !!w.document.getElementById('l4m-bypass-host'));
-  check('UI version 0.6.3', T.UI.version === '0.6.3', T.UI.version);
+  check('UI version 0.6.4', T.UI.version === '0.6.4', T.UI.version);
   const realExecuteWidgetWorkflow = T.Engine.executeWidgetWorkflow;
 
   // ---- (c) getClientId: bootstrap already called it, stable + persisted ----
@@ -186,6 +186,26 @@ async function main() {
   await T.Engine.runWidgetFromUrl('https://widget.test/widget/service.js?key=FAKEKEY');
   check('v0.6.3 e2e: real widget flow fills structured code, not "success"', w.document.querySelector('input[name="code"]').value === 'X7K9Q2', w.document.querySelector('input[name="code"]').value);
   check('v0.6.3 e2e: still fill-only, no POST', !reqLog.slice(reqBeforeV).some(r => r.url.includes('/links/get-link-info')));
+
+  // ---- v0.6.4: page-input fill verification (live bug: panel "u00f4ng" vs page "u00f4n") ----
+  const pageIn = w.document.querySelector('input[name="code"]');
+  pageIn.value = 'u00f4n';
+  const chkShort = T.Engine.verifyPageFill(pageIn, 'u00f4ng');
+  check('v0.6.4 verifyPageFill: detects 6/7 truncation', chkShort.ok === false && chkShort.filledLen === 6, JSON.stringify(chkShort));
+  pageIn.value = 'u00f4ng';
+  check('v0.6.4 verifyPageFill: full match ok', T.Engine.verifyPageFill(pageIn, 'u00f4ng').ok === true);
+  pageIn.setAttribute('maxlength', '6');
+  check('v0.6.4 verifyPageFill: reads maxlength attr', T.Engine.verifyPageFill(pageIn, 'u00f4ng').maxLen === 6);
+  pageIn.removeAttribute('maxlength');
+  T.Engine.fillCodeOnly('u00f4ng');
+  check('v0.6.4 fillCodeOnly: native setter fills page input fully', pageIn.value === 'u00f4ng', pageIn.value);
+  check('v0.6.4 fillCodeOnly: pendingCode keeps full code', T.Engine.pendingCode === 'u00f4ng');
+  const origVerify = T.Engine.verifyPageFill;
+  T.Engine.verifyPageFill = () => ({ ok: false, filledLen: 6, maxLen: 6 });
+  T.Engine.fillCodeOnly('u00f4ng');
+  check('v0.6.4 fillCodeOnly: truncated fill warns with counts + points at "Nộp ngay"', /chỉ nhận 6\/7 ký tự/.test(T.UI.statusText.textContent) && /Nộp ngay/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+  check('v0.6.4 fillCodeOnly: truncated fill still keeps full pendingCode', T.Engine.pendingCode === 'u00f4ng');
+  T.Engine.verifyPageFill = origVerify;
 
   console.log('---');
   console.log('passed', passed, 'failed', failed);

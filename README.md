@@ -65,3 +65,19 @@ Bấm vào đường link bên dưới để cài đặt trực tiếp vào **Ta
 ## 💬 Hỗ trợ & Cộng đồng
 
 - Báo lỗi hoặc nhận bản cập nhật mới nhất tại Discord: [discord.gg/vnbp](https://discord.gg/vnbp)
+
+---
+
+## 🔗 Link4m Bypass — Remake v0.6.0 (Mới)
+
+**File:** [`link4m-remake.user.js`](https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js)
+
+Remake từ bản deobf Link4m (n1ulls) — giữ 100% UI cyberpunk + luồng gốc (widget init → get_quest_code → step 2 → verify, OCR.space + Tesseract), kèm 3 patch v0.6:
+
+- **P1 `_traffic_cid_`**: tự sinh + lưu id cục bộ (`cid-...`); chưa gắn vào request nào — vị trí trên dây đợi soi tab Network live trên link4m.org/go/VDcp1.
+- **P2 Kiểm tra mặt nạ Bước 3**: domain OCR phải khớp mặt nạ (vd `kqbd***.site`), không khớp thì dừng, không đoán.
+- **P3 Chỉ điền mã**: lấy mã qua widget rồi điền vào ô code, KHÔNG tự nộp, KHÔNG tự giải captcha — bro tự bấm nút **Nộp ngay** + tự giải captcha để ra link đích.
+
+**Cài đặt:** mở link raw trên, Tampermonkey sẽ hỏi cài đặt; cập nhật tự động qua `@updateURL` khi có bản mới.
+
+**Test:** `node --check` + jsdom 36/36 PASS (mask / fill-only / `_traffic_cid_` / cấu trúc). Chưa test live — test thật trên link4m.org/go/VDcp1 bằng Chrome của bro.

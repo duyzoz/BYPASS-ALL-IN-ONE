@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Link4m Bypass — Remake (deobf + patches)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.1
+// @version      0.6.2
 // @description  Remake tu ban deobf Link4m (n1ulls): giu 100% UI + luong goc, kem 3 patch v0.6 — _traffic_cid_ tu sinh/luu, kiem tra mat na Buoc 3 cho OCR, chi dien ma (khong tu nop, khong tu giai captcha)
 // @author       n1ulls (Deobfuscated by Community) — Remake by Duyzoz
 // @updateURL    https://raw.githubusercontent.com/duyzoz/BYPASS-ALL-IN-ONE/main/link4m-remake.user.js
@@ -223,6 +223,10 @@
         btnStore: null,
         btnServer: null,
         btnSubmitNow: null,
+        // [PATCH v0.6.2] O dan tay URL widget.
+        wfallback: null,
+        wurlInput: null,
+        btnWidgetGo: null,
         btnMin: null,
         resultBox: null,
         rurl: null,
@@ -596,6 +600,31 @@
     box-shadow: none;
 }
 
+/* [PATCH v0.6.2] O dan tay URL widget khi khong tai duoc trang dich. */
+.wfallback {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 14px 13px;
+}
+.wfallback.on {
+    display: flex;
+}
+.wftag {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffb4a8;
+    line-height: 1.4;
+}
+.wfhelp {
+    font-size: 11px;
+    line-height: 1.5;
+    color: #93a3bd;
+}
+.wfhelp b {
+    color: #e9f4fa;
+}
+
 .links {
     display: flex;
     gap: 8px;
@@ -934,6 +963,16 @@ button:focus-visible {
                             <button class="lbtn submitnow" id="btnSubmitNow" type="button" disabled>Nộp ngay</button>
                         </div>
                     </form>
+                    <!-- [PATCH v0.6.2] Duong vong khi khong tai duoc trang dich (Cloudflare). -->
+                    <div class="wfallback" id="wfallback">
+                        <div class="wftag">⛔ Không tải được trang đích (Cloudflare chặn bot) — chạy thẳng widget:</div>
+                        <div class="urlwrap">
+                            <span class="uic">🧩</span>
+                            <input class="url" id="wurl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Dán URL widget (…/widget/service.js?key=…)">
+                        </div>
+                        <button class="go" id="wgo" type="button">Chạy widget</button>
+                        <div class="wfhelp">Mở tab trang đích → Ctrl+U xem source → tìm dòng <b>widget/service.js?key=</b> → copy nguyên URL đó dán vào đây.</div>
+                    </div>
                     <div class="result" id="result">
                         <div class="rtag">✓ URL của bạn</div>
                         <div class="rurl" id="rurl"></div>
@@ -966,6 +1005,9 @@ button:focus-visible {
             this.btnStore = this.shadow.getElementById('btnStore');
             this.btnServer = this.shadow.getElementById('btnServer');
             this.btnSubmitNow = this.shadow.getElementById('btnSubmitNow');
+            this.wfallback = this.shadow.getElementById('wfallback');
+            this.wurlInput = this.shadow.getElementById('wurl');
+            this.btnWidgetGo = this.shadow.getElementById('wgo');
             this.btnMin = this.shadow.getElementById('btnMin');
             this.resultBox = this.shadow.getElementById('result');
             this.rurl = this.shadow.getElementById('rurl');
@@ -1026,6 +1068,18 @@ button:focus-visible {
                 }
                 Engine.runManualUrlBypass(u);
             };
+
+            // [PATCH v0.6.2] Nut chay thang widget tu URL dan tay.
+            if (this.btnWidgetGo) {
+                this.btnWidgetGo.onclick = () => {
+                    const u = this.wurlInput ? this.wurlInput.value.trim() : '';
+                    if (!u) {
+                        this.setStatus('✗ Chưa dán URL widget', 'err');
+                        return;
+                    }
+                    Engine.runWidgetFromUrl(u);
+                };
+            }
         },
 
         setStatus(msg, type = 'info', showSpin = false) {
@@ -1047,6 +1101,11 @@ button:focus-visible {
 
         hideNotice() {
             if (this.notice) this.notice.style.display = 'none';
+        },
+
+        // [PATCH v0.6.2] Hien o dan tay URL widget khi khong tai duoc trang dich.
+        showWidgetFallback() {
+            if (this.wfallback) this.wfallback.classList.add('on');
         },
 
         setProgress(percent) {
@@ -1274,6 +1333,38 @@ button:focus-visible {
             return matches;
         },
 
+        // [PATCH v0.6.2] Parse 1 URL widget dan tay (tu view-source tab trang dich),
+        // dung cung regex nhu findWidgetScriptUrls nhung ap cho 1 URL don.
+        // Chap nhan co/khong co scheme: https://host/widget/service.js?key=...
+        parseWidgetUrl(url) {
+            if (!url) return null;
+            const m = String(url).trim().match(/^(?:https?:)?\/\/?([^\s\/]+)\/widget\/(service(?:-v\d+)?\.js)\?([^"'\s]*)/i);
+            if (!m) return null;
+            return { domain: m[1], file: m[2], query: m[3], fullUrl: `https://${m[1]}/widget/${m[2]}?${m[3]}` };
+        },
+
+        // [PATCH v0.6.2] Chay thang widget tu URL dan tay, bo qua buoc GET trang dich
+        // (buoc dang chet vi Cloudflare cat ket noi tan goc). Sau do van fill-only
+        // nhu P3: lay ma -> dien vao o code -> dung, khong tu nop.
+        async runWidgetFromUrl(url) {
+            const w = this.parseWidgetUrl(url);
+            if (!w) {
+                UI.setStatus('✗ URL widget không đúng dạng — cần dạng https://<host>/widget/service.js?key=…', 'err');
+                return;
+            }
+            UI.disableInput('Đang chạy widget…');
+            try {
+                const code = await this.executeWidgetWorkflow(w);
+                if (code) this.fillCodeOnly(code);
+                else UI.setStatus('⊘ Không lấy được mã từ widget', 'warn');
+            } catch (err) {
+                const msg = String(err && err.message || err);
+                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(w.domain) === -1 ? ' — widget: ' + w.domain : ''), 'err');
+            } finally {
+                UI.enableInput();
+            }
+        },
+
         extractPageTaskData() {
             const html = document.documentElement.innerHTML;
             const text = document.body ? document.body.innerText : '';
@@ -1449,7 +1540,8 @@ button:focus-visible {
                 // kiem tra 1 lan se co cookie cf_clearance, bam lai co the qua.
                 // Bao ro nguyen nhan thay vi bao chung chung "khong truy cap duoc".
                 if (res.status === 403 && /challenges\.cloudflare\.com|Just a moment/i.test(res.responseText || '')) {
-                    UI.setStatus('⛔ Trang đích chặn bot (Cloudflare) — mở tab trang đích qua kiểm tra 1 lần rồi bấm Bắt đầu lại', 'err');
+                    UI.setStatus('⛔ Trang đích chặn bot (Cloudflare) — mở tab trang đích qua kiểm tra 1 lần rồi bấm Bắt đầu lại, hoặc dán URL widget vào ô dưới để chạy thẳng', 'err');
+                    UI.showWidgetFallback();
                     UI.enableInput();
                     return;
                 }
@@ -1486,10 +1578,11 @@ button:focus-visible {
                     UI.setStatus('⊘ Không lấy được mã từ widget', 'warn');
                 }
             } catch (err) {
-                // [PATCH v0.6.1] Kem URL vao loi (neu loi mang thi URL da co san
-                // tu onerror, khong lap lai) de lan sau nhin la biet chet o dau.
+                // [PATCH v0.6.1/0.6.2] Kem URL vao loi (neu loi mang thi URL da co san
+                // tu onerror, khong lap lai) + mo o dan tay URL widget de bro chay vong.
                 const msg = String(err && err.message || err);
-                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(taskUrl) === -1 ? ' — URL: ' + taskUrl : ''), 'err');
+                UI.setStatus('✗ Có lỗi xảy ra: ' + msg + (msg.indexOf(taskUrl) === -1 ? ' — URL: ' + taskUrl : '') + ' — dán URL widget vào ô dưới để chạy thẳng', 'err');
+                UI.showWidgetFallback();
             } finally {
                 UI.enableInput();
             }

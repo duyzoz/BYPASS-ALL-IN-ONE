@@ -91,3 +91,12 @@ Nguyên nhân gốc (chứng minh live 2026-11-08): trang đích đứng sau Clo
 - Lỗi mạng giờ kèm luôn URL bị lỗi để nhìn là biết chết ở đâu.
 
 **Test:** `node --check` + jsdom 42/42 PASS (36 cũ + 6 mới: header / 403 Cloudflare / lỗi kèm URL). Live vẫn cần bro test lại trên VDcp1.
+
+### v0.6.2 — đường vòng khi Cloudflare chặn cả header trình duyệt
+
+v0.6.1 đổi header vẫn lỗi y cũ trên 789-club.cc (bro test live 2026-11-08, badge v0.6.1, lỗi `Loi mang khi gui request — URL: https://789-club.cc/`): tường lửa chặn ở mức TLS/fingerprint, không phải mức header — request từ GM_xhr chết trước cả khi có HTTP response.
+
+- Thêm ô **dán tay URL widget** (hiện ra khi tải trang đích lỗi): mở tab trang đích → Ctrl+U xem source → tìm dòng `widget/service.js?key=` → copy nguyên URL dán vào ô → bấm **Chạy widget**. Script bỏ qua bước GET trang đích, chạy thẳng luồng widget (init → get_quest_code → step 2 → verify) rồi điền mã như cũ, không tự nộp.
+- Lưu ý: nếu host widget cũng đứng sau Cloudflare thì bước chạy widget sẽ lỗi mạng tiếp — lúc đó panel sẽ báo rõ domain widget bị lỗi, mình tính tiếp.
+
+**Test:** `node --check` + jsdom 54/54 PASS (42 cũ + 12 mới: parse URL widget / hiện ô fallback / chạy widget không cần GET trang / URL sai báo rõ). Live cần bro test với URL widget thật từ view-source 789-club.cc.

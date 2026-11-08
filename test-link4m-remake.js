@@ -1,4 +1,4 @@
-// Mock tests for link4m-remake.user.js v0.6.1 — jsdom only, no network, no real account.
+// Mock tests for link4m-remake.user.js v0.6.2 — jsdom only, no network, no real account.
 // Run: NODE_PATH=~/workspace/deobf-cakj/node_modules node test-link4m-remake.js
 // Fake values only: FAKEKEY / FAKECODE* / fake domains. Nothing real is submitted.
 const { JSDOM } = require('jsdom');
@@ -35,7 +35,7 @@ async function main() {
   w.GM_getValue = (k, d) => (k in store ? store[k] : d);
   w.GM_setValue = (k, v) => { store[k] = v; };
   w.GM_setClipboard = () => {};
-  w.GM_info = { script: { version: '0.6.1' } };
+  w.GM_info = { script: { version: '0.6.2' } };
   const reqLog = [];
   w.GM_xmlhttpRequest = (opts) => {
     reqLog.push({ method: (opts.method || 'GET').toUpperCase(), url: opts.url, data: opts.data || null, headers: opts.headers || {} });
@@ -63,7 +63,7 @@ async function main() {
   if (!T) { console.log('passed', passed, 'failed', failed); process.exit(1); }
   check('no unhandled rejection from eval-time auto run', !unhandled, String(unhandled));
   check('panel exists (deobf Shadow DOM HUD kept)', !!w.document.getElementById('l4m-bypass-host'));
-  check('UI version 0.6.1', T.UI.version === '0.6.1', T.UI.version);
+  check('UI version 0.6.2', T.UI.version === '0.6.2', T.UI.version);
 
   // ---- (c) getClientId: bootstrap already called it, stable + persisted ----
   check('bootstrap persisted _traffic_cid_ (P1)', typeof store['_traffic_cid_'] === 'string' && store['_traffic_cid_'].startsWith('cid-'), JSON.stringify(store));
@@ -146,6 +146,27 @@ async function main() {
 
   await T.Engine.runManualUrlBypass('https://netfail.test/');
   check('v0.6.1 network error: status names the failing URL', /netfail\.test/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+
+  // ---- v0.6.2: manual widget URL fallback (page GET walled by Cloudflare) ----
+  check('parseWidgetUrl: full https URL', (() => { const w = T.Engine.parseWidgetUrl('https://widget.test/widget/service.js?key=FAKEKEY'); return w && w.domain === 'widget.test' && w.fullUrl === 'https://widget.test/widget/service.js?key=FAKEKEY'; })());
+  check('parseWidgetUrl: -v2 file + protocol-relative', (() => { const w = T.Engine.parseWidgetUrl('//cdn.test/widget/service-v2.js?key=K2&x=1'); return w && w.domain === 'cdn.test' && w.file === 'service-v2.js' && w.query === 'key=K2&x=1'; })());
+  check('parseWidgetUrl: null for homepage URL', T.Engine.parseWidgetUrl('https://789-club.cc/') === null);
+  check('parseWidgetUrl: null for non-widget js', T.Engine.parseWidgetUrl('https://example.com/app.js?key=1') === null);
+  check('parseWidgetUrl: null for empty', T.Engine.parseWidgetUrl('') === null);
+  // (fallback da hien tu block v0.6.1 truoc do vi ca 403 lan loi mang deu mo no)
+  await T.Engine.runManualUrlBypass('https://cfblocked.test/');
+  check('v0.6.2 fallback: shown after Cloudflare 403', T.UI.shadow.getElementById('wfallback').classList.contains('on'));
+  check('v0.6.2 fallback: 403 status points at pasting widget URL', /dán URL widget/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+  await T.Engine.runManualUrlBypass('https://netfail.test/');
+  check('v0.6.2 fallback: still shown after network error', T.UI.shadow.getElementById('wfallback').classList.contains('on'));
+  check('v0.6.2 fallback: network error status points at pasting widget URL', /dán URL widget/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
+  T.Engine.executeWidgetWorkflow = async () => 'WIDGET77';
+  const reqBeforeW = reqLog.length;
+  await T.Engine.runWidgetFromUrl('https://widget.test/widget/service.js?key=FAKEKEY');
+  check('v0.6.2 runWidgetFromUrl: fills code without page GET', w.document.querySelector('input[name="code"]').value === 'WIDGET77' && reqLog.length === reqBeforeW, 'reqs=' + (reqLog.length - reqBeforeW));
+  check('v0.6.2 runWidgetFromUrl: pendingCode stored, no POST', T.Engine.pendingCode === 'WIDGET77' && !reqLog.slice(reqBeforeW).some(r => r.url.includes('/links/get-link-info')));
+  await T.Engine.runWidgetFromUrl('https://789-club.cc/');
+  check('v0.6.2 runWidgetFromUrl: invalid URL errors clearly', /không đúng dạng/.test(T.UI.statusText.textContent), T.UI.statusText.textContent);
 
   console.log('---');
   console.log('passed', passed, 'failed', failed);
